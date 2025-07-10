@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactieve Leerlijn Nederlands VWO Onderbouw</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- Library to parse Markdown -->
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-button.active { background-color: #0369a1; color: white; border-color: #0369a1; }
+        .sub-tab-button.active { background-color: #e0f2fe; color: #0c4a6e; border-color: #0ea5e9; }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        .details-column p { margin-bottom: 0.5rem; }
+        .details-column strong { color: #0c4a6e; }
+        .details-column em { font-style: italic; color: #047857; } /* For KD10 emphasis */
+        table th, table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        table th { background-color: #f3f4f6; font-weight: 600; color: #1f2937;}
+        table td ul { list-style-type: disc; margin-left: 1.25rem; padding-left: 0.5rem;}
+        table td ul li { margin-bottom: 0.25rem; }
+        .rtti-R { color: #2563eb; font-weight: bold; } /* Blauw */
+        .rtti-T1 { color: #16a34a; font-weight: bold; } /* Groen */
+        .rtti-T2 { color: #d97706; font-weight: bold; } /* Oranje */
+        .rtti-I { color: #dc2626; font-weight: bold; } /* Rood */
+        .chart-container { position: relative; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; padding: 1rem; background-color: white; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); margin-top: 1.5rem; margin-bottom: 1.5rem; }
+        @media (min-width: 768px) { .chart-container { height: 400px; } }
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0,0,0,0.75);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        .prose h2 { margin-top: 1.5em; margin-bottom: 0.8em;}
+        .prose h3 { margin-top: 1.2em; margin-bottom: 0.6em;}
+        .prose p { margin-bottom: 1em; }
+        .prose ul { margin-bottom: 1em; margin-left: 1.5em; list-style-type: disc; }
+        .prose li { margin-bottom: 0.5em; }
+        .prose .note-kd { background-color: #e0f2fe; border-left: 4px solid #0ea5e9; padding: 1em; margin-top:1em; margin-bottom:1em; border-radius: 0.25rem;}
+        
+        /* Gemini Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            width: 90%;
+            max-width: 48rem; /* 768px */
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.3s;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+        .modal-content h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #0c4a6e;
+            margin-bottom: 1rem;
+        }
+        .modal-body {
+            min-height: 150px;
+        }
+        .modal-body ul { list-style-type: disc; padding-left: 1.5rem; }
+        .modal-body li { margin-bottom: 0.5rem; }
+        .modal-body h3 { font-weight: bold; margin-top: 1rem; }
+        
+        /* Spinner for loading state */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #0369a1;
+            animation: spin 1s ease infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+    <header class="bg-sky-700 text-white p-6 shadow-md">
+        <h1 class="text-3xl font-bold text-center">Interactieve Leerlijn Nederlands VWO Onderbouw</h1>
+    </header>
+
+    <nav class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-wrap justify-center space-x-2 py-3">
+                <button class="tab-button active py-2 px-4 rounded-md font-medium hover:bg-sky-600 hover:text-white transition-colors border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-sky-500" data-tab="tab-leerjaren">Leerjaren & Thema's</button>
+                <button class="tab-button py-2 px-4 rounded-md font-medium hover:bg-sky-600 hover:text-white transition-colors border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-sky-500" data-tab="tab-kerndoel-progressie">Kerndoel Progressie</button>
+                <button class="tab-button py-2 px-4 rounded-md font-medium hover:bg-sky-600 hover:text-white transition-colors border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-sky-500" data-tab="tab-introductie">Introductie & Principes</button>
+                <button class="tab-button py-2 px-4 rounded-md font-medium hover:bg-sky-600 hover:text-white transition-colors border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-sky-500" data-tab="tab-samenhang">Samenhang & Verticale Lijn</button>
+                <button class="tab-button py-2 px-4 rounded-md font-medium hover:bg-sky-600 hover:text-white transition-colors border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-sky-500" data-tab="tab-implementatie">Implementatie Adviezen</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4 md:p-8">
+        <section id="tab-leerjaren" class="content-section active">
+            <p class="text-lg text-stone-700 mb-6">Welkom bij de interactieve weergave van de leerlijn Nederlands voor de VWO-onderbouw. Deze applicatie is ontworpen om u te helpen de structuur, doelen en progressie binnen de leerlijn te verkennen. Navigeer hieronder per leerjaar en vervolgens per thema om de specifieke leerdoelen, toelichtingen en de verdeling van cognitieve niveaus volgens Bloom en RTTI te bekijken. Gebruik de ✨ knoppen om met behulp van AI direct suggesties voor leeractiviteiten en beoordelingscriteria te genereren.</p>
+            
+            <div id="leerjaar-nav" class="mb-6 flex flex-wrap justify-center gap-2">
+                <button class="sub-tab-button active py-2 px-4 rounded-md font-medium hover:bg-sky-100 transition-colors border-2 border-sky-500" data-leerjaar="vwo1">VWO 1</button>
+                <button class="sub-tab-button py-2 px-4 rounded-md font-medium hover:bg-sky-100 transition-colors border-2 border-sky-500" data-leerjaar="vwo2">VWO 2</button>
+                <button class="sub-tab-button py-2 px-4 rounded-md font-medium hover:bg-sky-100 transition-colors border-2 border-sky-500" data-leerjaar="vwo3">VWO 3</button>
+            </div>
+
+            <div id="leerjaar-content" class="bg-white p-6 rounded-lg shadow-lg">
+            </div>
+        </section>
+
+        <section id="tab-kerndoel-progressie" class="content-section">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-sky-700">Progressie per SLO Kerndoel</h2>
+                <p class="text-stone-700 mb-6">Dit tabblad toont de verticale progressie van de tussendoelen per SLO-kerndoel over de leerjaren VWO 1, VWO 2 en VWO 3. Zo kunt u in één oogopslag zien hoe specifieke kerndoelen worden opgebouwd en hoe de complexiteit toeneemt.</p>
+                <div class="overflow-x-auto">
+                    <table id="kerndoel-progressie-tabel" class="min-w-full bg-white shadow rounded-lg">
+                        <thead>
+                            <tr>
+                                <th class="w-1/4">SLO Kerndoel (Code & Omschrijving)</th>
+                                <th class="w-1/4">Tussendoelen VWO 1</th>
+                                <th class="w-1/4">Tussendoelen VWO 2</th>
+                                <th class="w-1/4">Tussendoelen VWO 3</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="tab-introductie" class="content-section">
+            <div class="bg-white p-6 rounded-lg shadow-lg prose max-w-none">
+                <h2>1. Inleiding</h2>
+                <p>De ontwikkeling van een robuuste en coherente leerlijn Nederlands voor de onderbouw van het VWO is van essentieel belang, zeker in het licht van de recente actualisatie van de kerndoelen. De bestaande kerndoelen, daterend uit 2006, worden door het onderwijsveld als te globaal ervaren en bieden onvoldoende houvast voor de concrete invulling van het curriculum. Deze globale formulering kan leiden tot inconsistenties in het onderwijsaanbod en een gebrek aan duidelijke, doorlopende leerlijnen die leerlingen adequaat voorbereiden op de bovenbouw en hun latere maatschappelijke participatie. De nieuwe conceptkerndoelen, waarvan de definitieve versie in april 2025 is gepubliceerd, beogen hierin verbetering te brengen door meer samenhang te creëren, overladenheid terug te dringen en de doorlopende leerlijnen te versterken. Deze leerlijn is ontworpen als antwoord op de breed gevoelde behoefte aan modernisering en concretisering van het curriculum Nederlands en biedt een concrete invulling van deze nieuwe kaders.</p>
+                
+                <p>Deze leerlijn is gefundeerd op drie centrale pijlers: de principes van Constructive Alignment (CA) zoals geformuleerd door John Biggs, de conceptkerndoelen Nederlands van SLO (Stichting Leerplanontwikkeling), en de Taxonomie van Bloom. Daarnaast is als extra classificatielaag de RTTI-methodiek (Reproductie, Toepassing 1, Toepassing 2, Inzicht) toegepast op de tussendoelen om de aard van de cognitieve prestatie verder te duiden. Constructive Alignment dient als het leidende ontwerpprincipe. Het kernidee is dat de beoogde leerresultaten (Intended Learning Outcomes - ILOs), de leeractiviteiten en de beoordelingsmethoden systematisch op elkaar worden afgestemd. De conceptkerndoelen Nederlands (versie 2025) vormen de inhoudelijke basis. De Taxonomie van Bloom en RTTI worden ingezet als hiërarchische modellen om cognitieve vaardigheden te classificeren en een duidelijke progressie in de leerdoelen te structureren.</p>
+                
+                <p>Een thematische ordening en een heldere progressie zijn cruciaal voor effectief onderwijs in de VWO-onderbouw. De leerlijn is daarom gestructureerd rond zes kernthema's: fictie, taalbeschouwing, grammatica, leesvaardigheid, luister- en spreekvaardigheid, en schrijfvaardigheid. Binnen deze thema's wordt een duidelijke opbouw in complexiteit en vaardigheidsniveau per leerjaar nagestreefd, waarbij overkoepelende einddoelen zijn opgesplitst in concrete, meetbare tussendoelen. Deze aanpak beoogt een solide basis te leggen en leerlingen geleidelijk te begeleiden naar een hoger niveau van taalbeheersing en kritisch denken.</p>
+                
+                <h2>2. Principiële Uitgangspunten van de Leerlijn</h2>
+                <p>De hier gepresenteerde leerlijn rust op een aantal fundamentele didactische en curriculaire principes die de structuur, inhoud en beoogde impact ervan bepalen. Deze principes waarborgen dat de leerlijn niet alleen voldoet aan de externe eisen, zoals de SLO-kerndoelen, maar ook een intern consistente en ontwikkelingsgerichte leerervaring voor VWO-leerlingen biedt.</p>
+                
+                <h3>2.1 Constructive Alignment (CA) in de Praktijk</h3>
+                <p>Het centrale uitgangspunt van Constructive Alignment is dat het leren van de leerling wordt geconstrueerd door de activiteiten die de leerling zelf onderneemt, en niet primair door de handelingen van de docent. Beoordeling dient dan ook gericht te zijn op de mate waarin leerlingen de beoogde leerresultaten (ILOs) hebben bereikt, en niet op hun vermogen om verstrekte informatie te reproduceren.</p>
+                <p>Voor deze leerlijn betekent dit concreet dat voor elk geformuleerd (tussen)doel (ILO) zorgvuldig is overwogen: Leeractiviteiten en Beoordelingsvormen. Feedback speelt een cruciale rol binnen CA.</p>
+                
+                <h3>2.2 De SLO Conceptkerndoelen (versie 2025) als Kompas</h3>
+                <p>De inhoudelijke ruggengraat van deze leerlijn wordt gevormd door de definitieve conceptkerndoelen Nederlands (april 2025). De hier uitgewerkte leerlijn focust primair op de kerndoelen 2, 3, 4, 6, 8 en 9. Kerndoel 5 (Taal en Maatschappij) is exemplarisch geïntegreerd binnen het thema Taalbeschouwing. </p>
+                <p>De kerndoelen 1 (Identiteit en Diversiteit), 7 (Taal, Cultuur en Identiteit) en 10 (Metacognitie en Zelfregulatie) zijn eveneens cruciaal voor een volledige taalontwikkeling. Hoewel deze niet als aparte thematische leerlijnen met uitgebreide tussendoelenreeksen in deze versie zijn opgenomen, wordt hun belang onderkend:</p>
+                <div class="note-kd">
+                    <p><strong>Kerndoel 1 (Identiteit en Diversiteit) en Kerndoel 7 (Taal, Cultuur en Identiteit):</strong> Deze kerndoelen kunnen en zouden idealiter geïntegreerd moeten worden binnen de bestaande thema's. Bijvoorbeeld:</p>
+                    <ul>
+                        <li>Bij <strong>Fictie</strong>: het analyseren van diverse personages, hun (culturele) achtergronden, en hoe literatuur identiteitsvraagstukken en culturele perspectieven verkent.</li>
+                        <li>Bij <strong>Communicatieve Vaardigheden</strong> (Luisteren, Spreken, Schrijven): het reflecteren op eigen (talige) identiteit in communicatie, het respectvol omgaan met diverse meningen en achtergronden, en het schrijven van teksten die persoonlijke of culturele ervaringen uitdrukken.</li>
+                        <li>Bij <strong>Taalbeschouwing</strong>: het onderzoeken hoe taal gebruikt wordt om identiteiten te construeren of culturele waarden over te dragen.</li>
+                    </ul>
+                    <p>Het ontwikkelen van specifieke tussendoelen hiervoor vraagt om een verdere didactische ontwerpslag per thema.</p>
+                </div>
+                <div class="note-kd">
+                    <p><strong>Kerndoel 10 (Metacognitie en Zelfregulatie):</strong> Dit kerndoel is fundamenteel voor al het leren en zou als een rode draad door *alle* leeractiviteiten en thema's moeten lopen. Het gaat om het expliciet aanleren en laten toepassen van vaardigheden zoals:</p>
+                    <ul>
+                        <li><strong>Plannen:</strong> leerlingen leren hun werk te organiseren, doelen te stellen voor een taak, en een aanpak te bepalen.</li>
+                        <li><strong>Monitoren:</strong> leerlingen leren hun eigen begrip en voortgang te controleren tijdens het werken aan een taak.</li>
+                        <li><strong>Reflecteren:</strong> leerlingen leren terug te kijken op hun leerproces, de effectiviteit van hun aanpak, en wat ze geleerd hebben.</li>
+                        <li><strong>Strategiegebruik:</strong> leerlingen leren bewust verschillende leer- en denkstrategieën in te zetten (bijv. lees-, schrijf-, woordleerstrategieën).</li>
+                        <li><strong>Feedback verwerken:</strong> leerlingen leren feedback te vragen, te begrijpen en constructief te gebruiken voor hun verdere ontwikkeling.</li>
+                    </ul>
+                    <p>In de uitwerking van Kerndoel 5 binnen Taalbeschouwing zijn voorbeelden opgenomen hoe de toelichtingen bij tussendoelen verrijkt kunnen worden met deze metacognitieve aspecten. Idealiter zou dit voor alle tussendoelen in de leerlijn systematisch moeten gebeuren.</p>
+                </div>
+                <p>Hoewel de leerlijn thematisch is georganiseerd, wordt de inherente samenhang tussen de domeinen Communicatie, Taal en Literatuur – een aspect dat ook door SLO wordt benadrukt – actief bevorderd. De thema's worden niet als geïsoleerde eenheden beschouwd, maar waar mogelijk en zinvol met elkaar verbonden.</p>
+
+                <h3>2.3 Taxonomie van Bloom en RTTI als Instrumenten voor Ontwikkeling</h3>
+                <p>De Taxonomie van Bloom dient als een instrument om de cognitieve complexiteit van de leerdoelen te structureren en een duidelijke progressie in de leerlijn te waarborgen. Elk geformuleerd (tussen)doel is gekoppeld aan een actief werkwoord dat correspondeert met een specifiek niveau uit de taxonomie: Onthouden, Begrijpen, Toepassen, Analyseren, Evalueren of Creëren.</p>
+                <p>Als aanvullende classificatie is de RTTI-methodiek toegepast. RTTI staat voor Reproductie, Toepassing 1 (bekende context), Toepassing 2 (nieuwe context/transfer), en Inzicht. Deze indeling helpt om de aard van de gevraagde denkvaardigheid verder te specificeren en kan docenten ondersteunen bij het ontwerpen van gevarieerde opdrachten en toetsen.</p>
+                <p>De leerlijn streeft naar een zichtbare progressie in cognitieve diepgang, niet alleen *tussen* de leerjaren (verticaal), maar ook *binnen* een leerjaar (horizontaal). Dit betekent dat hogere-orde denkvaardigheden (Analyseren, Evalueren, Creëren volgens Bloom; Inzicht en Toepassing 2 volgens RTTI) reeds vanaf VWO 1 op een leeftijdsadequate en ondersteunende wijze worden geïntroduceerd.</p>
+                <p>Deze pijlers – Constructive Alignment, de SLO-conceptkerndoelen, Bloom en RTTI – zijn niet losstaand, maar versterken elkaar wederzijds. De SLO-kerndoelen definiëren *wat* leerlingen moeten kennen en kunnen. Bloom en RTTI helpen dit te operationaliseren in meetbare tussendoelen met een oplopende cognitieve complexiteit. Constructive Alignment dicteert vervolgens dat voor elk van deze tussendoelen passende leeractiviteiten en beoordelingsvormen worden ontworpen.</p>
+                <p>Een ander belangrijk uitgangspunt is de aandacht voor "Taal in de leergebieden". SLO benadrukt dat de school de taalontwikkeling van de leerling in *alle* leergebieden moet stimuleren. Hoewel deze leerlijn primair gericht is op het vak Nederlands, is zij zo opgezet dat zij docenten kan inspireren en equiperen om verbindingen te leggen met andere vakken.</p>
+            </div>
+        </section>
+
+        <section id="tab-samenhang" class="content-section">
+            <div class="bg-white p-6 rounded-lg shadow-lg prose max-w-none">
+                <h2>4. Samenhang en Verticale Lijn</h2>
+                <p>Een effectieve leerlijn kenmerkt zich niet alleen door goed gedefinieerde doelen per leerjaar en thema, maar ook door een sterke samenhang, zowel horizontaal (binnen een leerjaar) als verticaal (tussen de leerjaren). Deze samenhang zorgt ervoor dat leerlingen verbanden kunnen leggen, vaardigheden kunnen integreren en een dieper en duurzamer begrip ontwikkelen.</p>
+                
+                <h3>Horizontale Samenhang (binnen een leerjaar):</h3>
+                <p>Binnen elk leerjaar zijn de zes thema's niet als geïsoleerde eilanden opgevat. De conceptkerndoelen zelf suggereren reeds een sterke verwevenheid. De leerlijn faciliteert deze integratie door mogelijkheden te bieden voor thematisch geïntegreerde projecten of lessen. Een voorbeeld: Fictie lezen -> Taalbeschouwing (stijl) -> Schrijfvaardigheid (recensie) -> Grammatica (correctheid) -> Luister- en Spreekvaardigheid (discussie) -> Leesvaardigheid (kritisch lezen recensies). Dergelijke geïntegreerde opdrachten maken het leren betekenisvoller.</p>
+                
+                <h3>Verticale Progressie (tussen de leerjaren):</h3>
+                <p>De leerlijn is ontworpen met een duidelijke opbouw in complexiteit van VWO 1 naar VWO 3, manifesterend in: Tekstcomplexiteit, Taakcomplexiteit, Cognitieve diepgang (Bloom & RTTI), en Mate van zelfstandigheid en reflectie. Dit leidt tot een spiraalcurriculum-benadering: kernconcepten keren terug op een hoger niveau.</p>
+                <p>Bijvoorbeeld, het thema 'argumentatie':</p>
+                <ul>
+                    <li><strong>VWO 1:</strong> Leerlingen *herkennen* een mening (Begrijpen/R). Ze *onderbouwen* hun eigen mening met één argument (Analyseren/T2).</li>
+                    <li><strong>VWO 2:</strong> Leerlingen *identificeren* standpunt en argumenten (Begrijpen/R). Ze *nemen deel* aan een discussie door te reageren op argumenten (Analyseren/T2).</li>
+                    <li><strong>VWO 3:</strong> Leerlingen *analyseren* argumentatiestructuur (Analyseren/I). Ze *evalueren* kwaliteit van argumentatie (Evalueren/I). Ze *schrijven* zelf een beargumenteerde tekst (Creëren/I) en *houden* een betogende spreekbeurt (Creëren/I).</li>
+                </ul>
+                
+                <h3>Integratie van Hogere Denkvaardigheden vanaf de Onderbouw:</h3>
+                <p>Hogere-orde denkvaardigheden (Analyseren, Evalueren, Creëren volgens Bloom; Inzicht en Toepassing 2 volgens RTTI) worden vanaf VWO 1 toegankelijk en ondersteund (scaffolding) geïntroduceerd. Voorbeelden:</p>
+                 <ul>
+                    <li><strong>Analyseren/T2 in VWO 1:</strong> Leerlingen *vergelijken* twee personages op basis van expliciet gegeven criteria.</li>
+                    <li><strong>Evalueren/I in VWO 1:</strong> Leerlingen *beoordelen* de acties van een personage als 'goed' of 'fout' en geven één eenvoudig argument.</li>
+                    <li><strong>Creëren/T2 of I in VWO 1:</strong> Leerlingen *bedenken* een alternatief einde voor een eenvoudig, bekend verhaal, binnen een duidelijke structuur.</li>
+                </ul>
+                <p>De "Leerlijn begrippen voor taalbeschouwing" van SLO vormt een fundament voor Taalbeschouwing en Grammatica, en zorgt voor een cumulatieve opbouw van metalinguïstisch bewustzijn.</p>
+            </div>
+        </section>
+
+        <section id="tab-implementatie" class="content-section">
+            <div class="bg-white p-6 rounded-lg shadow-lg prose max-w-none">
+                <h2>5. Implementatie-adviezen en Afronding</h2>
+                <p>De succesvolle implementatie van deze leerlijn vraagt om een actieve rol van docenten en schoolteams. Het is meer dan een document; het is een instrument dat richting kan geven aan de dagelijkse onderwijspraktijk en de curriculumontwikkeling op schoolniveau.</p>
+                
+                <h3>Praktische aanbevelingen voor docenten(teams):</h3>
+                <ul>
+                    <li><strong>Jaarplanning en Lesmateriaal:</strong> Gebruik doelen en activiteiten als basis.</li>
+                    <li><strong>Differentiatie:</strong> Varieer in complexiteit, ondersteuning, keuzeopdrachten. De RTTI-indeling kan helpen bij het ontwerpen van gedifferentieerde opdrachten.</li>
+                    <li><strong>Formatieve Evaluatie:</strong> Zet strategisch in voor feedback en sturing. Denk hierbij ook aan het expliciet maken van metacognitieve reflectiemomenten (KD10).</li>
+                    <li><strong>Rijke Taal- en Leesomgeving:</strong> Stimuleer taalgebruik en lezen.</li>
+                    <li><strong>Samenwerking binnen de sectie:</strong> Stem af en monitor. Bespreek ook hoe kerndoelen als KD1, KD5, KD7 en KD10 gezamenlijk en geïntegreerd kunnen worden aangepakt.</li>
+                    <li><strong>Vakoverstijgende samenwerking:</strong> Verhoog transferwaarde.</li>
+                </ul>
+                
+                <h3>De rol van de docent in Constructive Alignment:</h3>
+                <p>De docent is ontwerper van een krachtige leeromgeving en facilitator. Dit betekent: zorgvuldig selecteren/ontwerpen van leeractiviteiten, creëren van authentieke beoordelingssituaties, bieden van gerichte feedback, en stimuleren van actieve betrokkenheid en zelfreflectie. Het expliciet modelleren en begeleiden van metacognitieve vaardigheden (KD10) is hierbij essentieel.</p>
+                
+                <h3>Verwijzing naar kernbronnen:</h3>
+                <p>Voor volledige en actuele kerndoelen, zie de website van SLO. Aanvullende literatuur over CA, Bloom en RTTI kan verdieping bieden.</p>
+                
+                <h3>Afrondende reflectie:</h3>
+                <p>Deze leerlijn biedt een gedegen raamwerk. Curriculumontwikkeling is een continu proces. De definitieve kerndoelen worden verwacht per 1 augustus 2026. Beschouw dit als een 'levend document', periodiek te evalueren en aan te passen. Flexibiliteit, gecombineerd met principiële verankering, draagt bij aan continue verbetering. De verdere integratie van alle kerndoelen, met name de procesgerichte en overkoepelende doelen, is een belangrijke volgende stap in dit proces.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Gemini Modal -->
+    <div id="gemini-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title">Suggesties</h2>
+                <button id="modal-close-button" class="text-2xl font-bold text-stone-500 hover:text-stone-800">&times;</button>
+            </div>
+            <div id="modal-body" class="modal-body prose max-w-none">
+                <!-- Content will be injected here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+
+    <footer class="text-center p-4 mt-8 text-sm text-stone-600">
+        Gebaseerd op de Leerlijn Nederlands VWO Onderbouw, geïnspireerd door Constructive Alignment, SLO Conceptkerndoelen (2025), Bloom's Taxonomie en RTTI.
+    </footer>
+    
+    <div id="tooltip" class="tooltip"></div>
+
+
+<script>
+const leerlijnData = {
+    vwo1: {
+        introductie: "In het eerste leerjaar van het VWO ligt de nadruk op het leggen van een brede basis. Leerlingen maken kennis met de verschillende facetten van het vak Nederlands, ontwikkelen basisvaardigheden en bouwen aan hun zelfvertrouwen als taalgebruikers. Hogere-orde denkvaardigheden worden op een toegankelijke manier geïntroduceerd, vaak met de nodige ondersteuning (scaffolding). Er wordt een begin gemaakt met het bewust worden van taal in relatie tot de maatschappij en de eigen identiteit.",
+        themas: {
+            fictie: {
+                naam: "Fictie (Literatuur)",
+                intro: "In VWO 1 ligt de nadruk bij fictie op het kennismaken met diverse jeugdliteratuur, het ontwikkelen van leesplezier en het leggen van een basis voor literaire begripsvorming. Leerlingen leren eenvoudige verhaalaspecten te herkennen en hun eerste leeservaringen te verwoorden. De SLO-kerndoelen die hier centraal staan zijn met name gericht op ervaring opdoen met literatuur (KD 8A, 8B) en een eerste, basaal inzicht in verhalende teksten en genres (KD 9A, 9B). Elementen van KD1 (Identiteit) en KD7 (Cultuur) kunnen worden aangestipt via de keuze van verhalen en de bespreking van personages en hun context.",
+                progressie: "De doelen starten met basale herkenning (Onthouden/R) en beschrijving (Begrijpen/R) van literaire elementen en persoonlijke reacties. Er is een eerste aanzet tot Toepassen/T1 (boekkeuze motiveren). De complexiteit van de teksten zal relatief laag zijn (leeftijdsadequate jeugdliteratuur, eenvoudige gedichten). De focus ligt op het opdoen van positieve leeservaringen. Leerlingen <em>plannen</em> hun leeswerk (KD10) door bijv. leesmomenten in te roosteren en <em>reflecteren</em> kort op wat een verhaal met hen doet.",
+                doelen: [
+                    { id: "v1f1", slo: "KD 8A", omschrijving: "Ontwikkelen leesvoorkeur", tussendoel: "De leerling *noemt* ten minste drie verschillende genres binnen jeugdliteratuur (bijv. avontuur, detective, fantasy) na het lezen/beluisteren van diverse fragmenten.", bloom: "Onthouden", rtti: "R", werkwoord: "Noemen", toelichting: "Leerlingen lezen/beluisteren fragmenten, *benoemen* genres. Formatief: klassengesprek over genrekenmerken. <em>Reflectie (KD10): Welk genre spreekt mij nu al aan en waarom?</em>" },
+                    { id: "v1f2", slo: "KD 8A", omschrijving: "Ontwikkelen leesvoorkeur", tussendoel: "De leerling *selecteert* een boek op basis van een persoonlijke interesse (bijv. omslag, flaptekst, aanbeveling) en *geeft aan* waarom dit boek is gekozen.", bloom: "Toepassen", rtti: "T1", werkwoord: "Selecteren, Aangeven", toelichting: "Leerlingen *kiezen* een boek in de mediatheek en *schrijven* een korte motivatie (ca. 50 woorden). Summatief: inleveren motivatie. <em>Planning (KD10): Hoe kies ik een boek dat bij mij past? Welke stappen zet ik?</em>" },
+                    { id: "v1f3", slo: "KD 8B", omschrijving: "Verkennen waarde literatuur", tussendoel: "De leerling *beschrijft* in eigen woorden de hoofdgebeurtenissen (plot) van een gelezen jeugdboek.", bloom: "Begrijpen", rtti: "R", werkwoord: "Beschrijven", toelichting: "Leerling leest een jeugdboek en *maakt* een storyboard of een beknopte samenvatting van de plot. Formatief: peer-review op samenvattingen. <em>Monitoring (KD10): Begrijp ik het verhaal goed genoeg om de plot na te vertellen?</em>" },
+                    { id: "v1f4", slo: "KD 8B", omschrijving: "Verkennen waarde literatuur", tussendoel: "De leerling *vertelt* welke emoties een specifieke scène in een verhaal bij hem/haar opriep en *legt uit* waardoor dit kwam.", bloom: "Begrijpen", rtti: "R", werkwoord: "Vertellen, Uitleggen", toelichting: "Na het (voor)lezen van een pakkende scène, *delen* leerlingen in kleine groepjes hun emotionele reacties en *verklaren* deze. Formatief: observatie van deelname aan gesprek. <em>Raakvlak KD1: Hoe beïnvloedt mijn eigen achtergrond mijn reactie op het verhaal?</em>" },
+                    { id: "v1f5", slo: "KD 9A", omschrijving: "Inzicht in verhalende teksten", tussendoel: "De leerling *identificeert* de hoofdperso(o)n(en) en de belangrijkste bijfiguren in een gelezen verhaal.", bloom: "Onthouden", rtti: "R", werkwoord: "Identificeren", toelichting: "Leerlingen *maken* een personageschema van een kort verhaal of gelezen boek. Summatief: ingeleverd schema." },
+                    { id: "v1f6", slo: "KD 9A", omschrijving: "Inzicht in verhalende teksten", tussendoel: "De leerling *legt uit* wat het belangrijkste probleem of de wens van de hoofdpersoon is in een eenvoudig verhaal.", bloom: "Begrijpen", rtti: "R", werkwoord: "Uitleggen", toelichting: "Klassikale bespreking na het lezen van een verhaal, waarbij leerlingen *verwoorden* wat de protagonist drijft. Formatief: antwoorden op gerichte vragen." },
+                    { id: "v1f7", slo: "KD 9B", omschrijving: "Inzicht in genrekenmerken", tussendoel: "De leerling *herkent* eenvoudige uiterlijke kenmerken van poëzie (bijv. rijm, korte regels, strofes) in een gedicht.", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen", toelichting: "Leerlingen *onderstrepen* rijmwoorden in een eenvoudig gedicht en *bespreken* wat een gedicht anders maakt dan een verhaal. Formatief: klassikale inventarisatie van kenmerken." },
+                    { id: "v1f8", slo: "KD 9B", omschrijving: "Inzicht in genrekenmerken", tussendoel: "De leerling *benoemt* het effect van eenvoudige visuele elementen (bijv. illustraties) op de leesbeleving van een (beeld)verhaal.", bloom: "Begrijpen", rtti: "R", werkwoord: "Benoemen", toelichting: "Leerlingen *bekijken* een graphic novel of geïllustreerd verhaal en *bespreken* welke rol de tekeningen spelen. Formatief: klassengesprek." }
+                ]
+            },
+            taalbeschouwing: {
+                naam: "Taalbeschouwing (incl. Taal & Maatschappij)",
+                intro: "Taalbeschouwing in VWO 1 richt zich op het bewustmaken van leerlingen van taal als een systeem en als een middel om te communiceren in een maatschappelijke context. De nadruk ligt op het herkennen van basale taalverschijnselen en het ontwikkelen van een eerste metalinguïstisch en sociolinguïstisch bewustzijn. Kerndoel 6A (relatie vorm en betekenis), 6C (zakelijke genres, vwo-aanvulling) en Kerndoel 5 (Taal en Maatschappij) zijn hier relevant.",
+                progressie: "De focus ligt op het herkennen en benoemen van basale taalverschijnselen (R) en het begrijpen van elementaire relaties tussen taalvorm, betekenis, functie en maatschappelijke context (R/T1). De contexten zijn herkenbaar. Leerlingen <em>monitoren</em> hun begrip van nieuwe termen (KD10) door bijvoorbeeld een eigen begrippenlijst bij te houden.",
+                doelen: [
+                    { id: "v1t1", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *onderscheidt* spreektaal van schrijftaal aan de hand van gegeven voorbeelden.", bloom: "Begrijpen", rtti: "R", werkwoord: "Onderscheiden", toelichting: "Leerlingen *vergelijken* een chatgesprek met een stukje uit een schoolboek en *benoemen* de verschillen. Formatief: klassikale bespreking. <em>Reflectie (KD10): Wanneer gebruik ik zelf spreektaal en wanneer schrijftaal? Waarom?</em>" },
+                    { id: "v1t2", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *herkent* dat de betekenis van een woord kan veranderen afhankelijk van de klemtoon of intonatie (bijv. bij homografen).", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen", toelichting: "Docent *demonstreert* met voorbeelden (bijv. \"vóórkomen\" vs. \"voorkómen\"). Leerlingen *oefenen* met het uitspreken en *identificeren* betekenisverschillen. Formatief: observatie." },
+                    { id: "v1t3", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *geeft voorbeelden* van hoe taalgebruik (woordkeus, aanspreekvorm) verschilt in formele en informele situaties.", bloom: "Begrijpen", rtti: "T1", werkwoord: "Geven van voorbeelden", toelichting: "Leerlingen *schrijven* een kort mailtje aan een vriend en aan een onbekende volwassene over hetzelfde onderwerp en *bespreken* de verschillen. Formatief: peer-feedback op de mailtjes." },
+                    { id: "v1t4", slo: "KD 6C", omschrijving: "Inzicht in zakelijke genres, vwo", tussendoel: "De leerling *identificeert* het communicatieve doel (informeren, amuseren, instrueren) van eenvoudige, bekende tekstsoorten (bijv. recept, mop, nieuwsberichtje).", bloom: "Onthouden", rtti: "R", werkwoord: "Identificeren", toelichting: "Leerlingen *koppelen* korte teksten aan het juiste communicatieve doel. Formatief: invuloefening of quiz." },
+                    { id: "v1t5", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *benoemt* hoe de woordvolgorde in een eenvoudige Nederlandse zin de betekenis kan beïnvloeden (bijv. vraagzin vs. mededelende zin).", bloom: "Begrijpen", rtti: "R", werkwoord: "Benoemen", toelichting: "Leerlingen *herschikken* woorden om van een mededelende zin een vraagzin te maken en *verklaren* wat er verandert. Formatief: klassikale oefening." },
+                    { id: "v1t6", slo: "KD 5", omschrijving: "Inzicht in taal en maatschappij", tussendoel: "De leerling *noemt* voorbeelden van verschillende talen die in de eigen klas/school gesproken worden en *bespreekt* waarom meertaligheid voorkomt.", bloom: "Onthouden", rtti: "R", werkwoord: "Noemen, Bespreken", toelichting: "Klassikale inventarisatie van talen, gevolgd door een kort gesprek over de herkomst van meertaligheid (bijv. migratie, familie). <em>Raakvlak KD1: Bewustwording van talige diversiteit. Planning (KD10): Hoe pak ik het aan om hierover informatie te verzamelen/bespreken?</em>" },
+                    { id: "v1t7", slo: "KD 5", omschrijving: "Inzicht in taal en maatschappij", tussendoel: "De leerling *herkent* dat taal kan veranderen door invloeden van andere talen (bijv. Engelse leenwoorden in het Nederlands).", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen", toelichting: "Leerlingen *verzamelen* Engelse leenwoorden uit hun dagelijkse taalgebruik of media. Formatief: klassikale bespreking van voorbeelden. <em>Monitoring (KD10): Herken ik deze woorden ook als ik lees of luister?</em>" }
+                ]
+            },
+            grammatica: {
+                naam: "Grammatica",
+                intro: "Grammatica in VWO 1 legt de fundamenten voor zinsontleding en woordsoortbenoeming. Het doel is niet alleen het aanleren van regels, maar ook het ontwikkelen van inzicht in hoe zinnen zijn opgebouwd en hoe woorden functioneren. Kerndoel 6B (spelling, formulering, interpunctie) is hier leidend, ondersteund door begrippen uit de leerlijn taalbeschouwing zoals \"werkwoord\", \"zelfstandig naamwoord\", \"lidwoord\", \"onderwerp\", \"persoonsvorm\".",
+                progressie: "De nadruk ligt op het herkennen van basale grammaticale eenheden (R) en het toepassen van de meest frequente spellings- en interpunctieregels (T1). De zinnen zijn relatief eenvoudig van structuur. Het functionele aspect van grammatica (waarom is dit belangrijk?) wordt aangestipt. Leerlingen <em>monitoren</em> (KD10) hun toepassing van regels en <em>gebruiken</em> feedback (KD10) om hun werk te verbeteren.",
+                doelen: [
+                     { id: "v1g1", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *identificeert* in eenvoudige zinnen de persoonsvorm en het onderwerp.", bloom: "Onthouden", rtti: "R", werkwoord: "Identificeren", toelichting: "Leerlingen *passen* de vraagproef en getalsproef toe om persoonsvorm en onderwerp te *vinden* in aangeboden zinnen. Formatief: oefeningen in werkboek/digitaal. <em>Strategiegebruik (KD10): Welke 'trucjes' helpen mij om pv en ow te vinden?</em>" },
+                     { id: "v1g2", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *benoemt* de woordsoorten zelfstandig naamwoord, werkwoord, lidwoord en bijvoeglijk naamwoord in een zin.", bloom: "Onthouden", rtti: "R", werkwoord: "Benoemen", toelichting: "Leerlingen *onderstrepen* en *labelen* de gevraagde woordsoorten in zinnen. Formatief: woordsoortenbingo of digitale quiz." },
+                     { id: "v1g3", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *past* de basisregels voor de spelling van de persoonsvorm in de tegenwoordige tijd (stam, stam+t) correct toe.", bloom: "Toepassen", rtti: "T1", werkwoord: "Toepassen", toelichting: "Leerlingen *vullen* de juiste werkwoordsvormen in in gatenteksten. Summatief: korte dictee of invultoets. <em>Reflectie (KD10): Welke fouten maak ik nog en hoe kan ik dat verbeteren?</em>" },
+                     { id: "v1g4", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *gebruikt* hoofdletters (begin van de zin, eigennamen) en leestekens (punt, vraagteken, uitroepteken) correct in eigen korte teksten.", bloom: "Toepassen", rtti: "T1", werkwoord: "Gebruiken", toelichting: "Bij het schrijven van een kort verhaaltje (zie Schrijfvaardigheid) *letten* leerlingen op correcte interpunctie en hoofdlettergebruik. Formatief: peer-editing met checklist." },
+                     { id: "v1g5", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *legt uit* waarom de juiste spelling van werkwoorden belangrijk is voor de duidelijkheid van een tekst.", bloom: "Begrijpen", rtti: "R", werkwoord: "Uitleggen", toelichting: "Klassengesprek over de gevolgen van spelfouten in werkwoorden voor de betekenis of leesbaarheid. Formatief: mondelinge bijdrage." }
+                ]
+            },
+            leesvaardigheid: {
+                naam: "Leesvaardigheid",
+                intro: "Leesvaardigheid in VWO 1 focust op het ontwikkelen van leesplezier, het aanleren van basisleesstrategieën en het begrijpen van eenvoudige informatieve en instructieve teksten. Kerndoel 2A (begrip van teksten) en 2B (evalueren en reflecteren) zijn hierbij richtinggevend. De teksten zijn kort, hebben een duidelijke structuur en sluiten aan bij de belevingswereld van de leerlingen.",
+                progressie: "De focus ligt op het aanleren van strategieën voor, tijdens en na het lezen van relatief eenvoudige teksten (T1). Het gaat om het begrijpen van expliciete informatie (R) en het maken van een eerste, eenvoudige evaluatie (I). De complexiteit van teksten en de diepgang van het begrip zullen in de volgende jaren toenemen. Leerlingen <em>plannen</em> (KD10) hun leesaanpak en <em>reflecteren</em> (KD10) op de effectiviteit van gebruikte strategieën.",
+                doelen: [
+                    { id: "v1l1", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *activeert* voorkennis over een onderwerp voordat hij/zij een informatieve tekst leest.", bloom: "Toepassen", rtti: "T1", werkwoord: "Activeren", toelichting: "Voor het lezen van een tekst over bijvoorbeeld \"dinosaurussen\", *maken* leerlingen een woordweb of *bespreken* klassikaal wat ze al weten. Formatief: observatie en bijdrage. <em>Strategie (KD10): Dit is een 'voor het lezen' strategie. Waarom helpt dit?</em>" },
+                    { id: "v1l2", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *vindt* het onderwerp en de hoofdgedachte van een korte, eenvoudige informatieve tekst.", bloom: "Begrijpen", rtti: "R", werkwoord: "Vinden", toelichting: "Na het lezen van een alinea of korte tekst, *formuleren* leerlingen in één zin het onderwerp en de hoofdgedachte. Formatief: bespreken van antwoorden." },
+                    { id: "v1l3", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *gebruikt* de opmaak van een tekst (titels, kopjes, afbeeldingen) om de inhoud globaal te voorspellen.", bloom: "Toepassen", rtti: "T1", werkwoord: "Gebruiken", toelichting: "Leerlingen *bekijken* een tekst (zonder deze al te lezen) en *voorspellen* waar de tekst over zal gaan. Formatief: klassikale inventarisatie van voorspellingen." },
+                    { id: "v1l4", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *beantwoordt* gerichte vragen over de letterlijke informatie in een informatieve of instructieve tekst.", bloom: "Begrijpen", rtti: "R", werkwoord: "Beantwoorden", toelichting: "Leerlingen *lezen* een tekst en *beantwoorden* wie-wat-waar-wanneer vragen. Summatief: korte schriftelijke toets met open vragen." },
+                    { id: "v1l5", slo: "KD 2B", omschrijving: "Evalueren en reflecteren", tussendoel: "De leerling *geeft aan* of een tekst voor hem/haar nuttig of interessant was en *legt kort uit* waarom.", bloom: "Evalueren", rtti: "I", werkwoord: "Aangeven, Uitleggen", toelichting: "Na het lezen van een tekst *vullen* leerlingen een korte evaluatie in (bijv. met smileys en een toelichtende zin). Formatief: steekproefsgewijs bespreken van evaluaties. <em>Reflectie (KD10): Wat heb ik van deze tekst geleerd? Zou ik een andere tekst over dit onderwerp willen lezen?</em>" }
+                ]
+            },
+            luisterspreekvaardigheid: {
+                naam: "Luister- en Spreekvaardigheid",
+                intro: "In VWO 1 wordt een basis gelegd voor effectieve mondelinge communicatie. Dit omvat zowel het aandachtig luisteren naar anderen als het durven en kunnen spreken in verschillende, voornamelijk informele, situaties. Kerndoelen 2A (begrijpen van (gesproken) teksten), 3A (doelgericht spreken), 4A (doelgericht gesprekken voeren) en 4B (gesprekken voeren om te leren) staan centraal. Er kan een link gelegd worden met KD1 (Identiteit) door te oefenen met het verwoorden van eigen meningen en ervaringen.",
+                progressie: "De nadruk ligt op basale luister- (R) en spreekvaardigheden (T1) in vertrouwde contexten. Het gaat om het overbrengen en ontvangen van eenvoudige boodschappen, het uiten van persoonlijke ervaringen en het voorzichtig deelnemen aan gesprekken. De stap naar Analyseren/T2 (mening onderbouwen) is een eerste aanzet tot hogere-orde denken in een mondelinge context. Leerlingen <em>plannen</em> (KD10) korte spreekbeurten en <em>reflecteren</em> (KD10) op hun luistergedrag.",
+                doelen: [
+                    { id: "v1ls1", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *herhaalt* de kerninformatie uit een korte, gesproken mededeling of instructie.", bloom: "Onthouden", rtti: "R", werkwoord: "Herhalen", toelichting: "Na een klassikale mededeling *vraagt* de docent enkele leerlingen de boodschap samen te vatten. Formatief: correctheid van de samenvatting. <em>Monitoring (KD10): Heb ik goed geluisterd? Heb ik de kern begrepen?</em>" },
+                    { id: "v1ls2", slo: "KD 3A", omschrijving: "Doelgericht spreken", tussendoel: "De leerling *vertelt* een korte, persoonlijke anekdote op een begrijpelijke manier aan een klein groepje.", bloom: "Toepassen", rtti: "T1", werkwoord: "Vertellen", toelichting: "Leerlingen *bereiden* een korte anekdote voor en *vertellen* deze in een groepje van drie of vier. Formatief: peer-feedback op duidelijkheid en verstaanbaarheid." },
+                    { id: "v1ls3", slo: "KD 3A", omschrijving: "Doelgericht spreken", tussendoel: "De leerling *stelt* duidelijke vragen om informatie te verkrijgen over een bekend onderwerp.", bloom: "Toepassen", rtti: "T1", werkwoord: "Stellen", toelichting: "Tijdens een klassengesprek of interview-oefening *formuleren* leerlingen vragen. Formatief: observatie van vraagstelling." },
+                    { id: "v1ls4", slo: "KD 4A", omschrijving: "Doelgericht gesprekken voeren", tussendoel: "De leerling *luistert* actief naar een medeleerling (aankijken, knikken) tijdens een kort gesprek.", bloom: "Toepassen", rtti: "T1", werkwoord: "Luisteren", toelichting: "In duo's *voeren* leerlingen een kort gesprekje waarbij ze oefenen met luistervaardigheden. Formatief: observatie door docent of peer-observatie. <em>Reflectie (KD10): Heb ik echt geluisterd, of wachtte ik op mijn beurt om te praten?</em>" },
+                    { id: "v1ls5", slo: "KD 4B", omschrijving: "Gesprekken voeren om te leren", tussendoel: "De leerling *geeft* zijn/haar mening over een eenvoudig, alledaags onderwerp en *onderbouwt* deze met één argument.", bloom: "Analyseren", rtti: "T2", werkwoord: "Geven, Onderbouwen", toelichting: "Klassikale discussie over een stelling (bijv. \"huiswerk moet worden afgeschaft\"), waarbij leerlingen hun mening *geven* en *beargumenteren*. Formatief: bijdrage aan discussie." }
+                ]
+            },
+            schrijfvaardigheid: {
+                naam: "Schrijfvaardigheid",
+                intro: "Schrijfvaardigheid in VWO 1 richt zich op het plezier in schrijven, het produceren van korte, eenvoudige teksten voor verschillende doelen en het toepassen van basisconventies voor spelling en interpunctie. Kerndoelen 3A (doelgericht schrijven), 3B (creatief taalgebruik) en 3C (schrijven om te leren) zijn leidend. Hier kunnen verbindingen met KD1 (Identiteit) worden gelegd door leerlingen te laten schrijven over persoonlijke ervaringen of meningen.",
+                progressie: "De focus ligt op het produceren van korte teksten met een duidelijke structuur en boodschap (T1). Creativiteit wordt gestimuleerd (I). Er is aandacht voor basale correctheid op zins- en woordniveau. De stap naar Creëren/I (fantasierijk verhaaltje) introduceert een hogere denkvaardigheid op een laagdrempelige manier. Leerlingen oefenen met een eenvoudige vorm van het <em>schrijfproces (plannen, schrijven, reviseren - KD10)</em>.",
+                 doelen: [
+                    { id: "v1s1", slo: "KD 3A", omschrijving: "Doelgericht schrijven", tussendoel: "De leerling *schrijft* een kort, persoonlijk bericht (bijv. kaartje, e-mail aan een vriend) met een duidelijke boodschap.", bloom: "Toepassen", rtti: "T1", werkwoord: "Schrijven", toelichting: "Leerlingen *schrijven* een bedankkaartje of een kort mailtje naar een klasgenoot. Formatief: peer-check op duidelijkheid. <em>Planning (KD10): Wat wil ik precies zeggen? Voor wie schrijf ik?</em>" },
+                    { id: "v1s2", slo: "KD 3A", omschrijving: "Doelgericht schrijven", tussendoel: "De leerling *formuleert* eenvoudige, correcte zinnen (onderwerp-persoonsvorm-rest) in een eigen tekst.", bloom: "Toepassen", rtti: "T1", werkwoord: "Formuleren", toelichting: "Bij het schrijven van een kort verhaaltje *letten* leerlingen op zinsbouw. Formatief: docent geeft feedback op enkele zinnen." },
+                    { id: "v1s3", slo: "KD 3B", omschrijving: "Creatief taal gebruiken", tussendoel: "De leerling *schrijft* een kort, fantasierijk verhaaltje (ca. 100 woorden) met een begin, midden en eind.", bloom: "Creëren", rtti: "I", werkwoord: "Schrijven", toelichting: "Leerlingen *krijgen* een beginzin of een plaatje en *bedenken* en *schrijven* een vervolg. Summatief: ingeleverd verhaaltje, beoordeeld op creativiteit en structuur." },
+                    { id: "v1s4", slo: "KD 3C", omschrijving: "Schrijven om te leren", tussendoel: "De leerling *maakt* eenvoudige aantekeningen (steekwoorden, korte zinnen) bij een klassikale uitleg of een korte informatieve tekst.", bloom: "Begrijpen", rtti: "R", werkwoord: "Maken", toelichting: "Tijdens een uitleg *noteren* leerlingen de belangrijkste punten. Formatief: vergelijken van aantekeningen in duo's." },
+                    { id: "v1s5", slo: "KD 3A", omschrijving: "Reviseren van teksten", tussendoel: "De leerling *verbetert* eigen spelfouten en interpunctiefouten in een korte tekst aan de hand van gerichte feedback.", bloom: "Toepassen", rtti: "T1", werkwoord: "Verbeteren", toelichting: "Na feedback van de docent of een medeleerling *herschrijven* leerlingen hun tekst. Formatief: controle van de revisie. <em>Feedback verwerken (KD10): Wat kan ik leren van deze feedback voor mijn volgende tekst?</em>" }
+                ]
+            }
+        }
+    },
+    vwo2: { 
+        introductie: "In het tweede leerjaar wordt voortgebouwd op de in VWO 1 gelegde basis. De complexiteit van teksten en taken neemt toe, en er wordt een groter beroep gedaan op de zelfstandigheid en het analytisch vermogen van de leerlingen. De hogere-orde denkvaardigheden worden verder ontwikkeld en in meer gevarieerde contexten toegepast. Er is meer aandacht voor hoe taal functioneert in de maatschappij en hoe het verbonden is met cultuur en identiteit.",
+        themas: {
+            fictie: {
+                naam: "Fictie (Literatuur)",
+                intro: "In VWO 2 wordt de kennismaking met literatuur verdiept. Leerlingen lezen complexere jeugdboeken en maken kennis met meer literaire begrippen. De nadruk verschuift van louter ervaring opdoen naar het beginnen te analyseren van verhaalaspecten en het verfijnen van de eigen leesvoorkeur en -interpretatie. Kerndoelen 8A, 8B, 9A, 9B en 9C (literatuur uit verschillende tijden) zijn relevant. Verbanden met KD1 (Identiteit) en KD7 (Cultuur) worden explicieter gelegd bij het analyseren van personages en thema's.",
+                progressie: "De teksten worden langer en thematisch complexer. Leerlingen gaan dieper in op verhaalstructuur, personageontwikkeling en stijl. Er is een duidelijke stap naar Analyseren/I (vergelijken, ontwikkeling personage). De kennismaking met literatuur uit verschillende tijden wordt gestart. Leerlingen <em>monitoren</em> (KD10) hun begrip van complexere verhaallijnen en <em>reflecteren</em> (KD10) op de betekenis van de gelezen werken.",
+                doelen: [
+                    { id: "v2f1", slo: "KD 8A", omschrijving: "Ontwikkelen leesvoorkeur", tussendoel: "De leerling *vergelijkt* twee jeugdboeken van hetzelfde genre en *beargumenteert* welk boek zijn/haar voorkeur heeft.", bloom: "Analyseren", rtti: "I", werkwoord: "Vergelijken, Beargumenteren", toelichting: "Leerlingen lezen twee boeken (bijv. twee detectives) en *schrijven* een korte vergelijkende recensie. Summatief: recensie. <em>Reflectie (KD10): Welke criteria gebruik ik om mijn voorkeur te bepalen?</em>" },
+                    { id: "v2f2", slo: "KD 8B", omschrijving: "Verkennen waarde literatuur", tussendoel: "De leerling *legt uit* hoe een gelezen boek hem/haar aan het denken heeft gezet over een bepaald onderwerp of thema.", bloom: "Begrijpen", rtti: "T1", werkwoord: "Uitleggen", toelichting: "Na het lezen van een boek met een duidelijke thematiek (bijv. vriendschap, pesten) *voeren* leerlingen een klassengesprek of *schrijven* een korte reflectie. Formatief: bijdrage/reflectie." },
+                    { id: "v2f3", slo: "KD 9A", omschrijving: "Inzicht in verhalende teksten", tussendoel: "De leerling *analyseert* de ontwikkeling van een hoofdpersoon in een verhaal en *beschrijft* welke gebeurtenissen hieraan bijdragen.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren, Beschrijven", toelichting: "Leerlingen *maken* een tijdlijn van de ontwikkeling van een personage en *markeren* cruciale gebeurtenissen. Formatief: presentatie van analyse. <em>Link KD1: Hoe verandert de identiteit van het personage?</em>" },
+                    { id: "v2f4", slo: "KD 9A", omschrijving: "Inzicht in verhalende teksten", tussendoel: "De leerling *onderscheidt* verschillende vertelperspectieven (ik-perspectief, personaal perspectief) in verhaalfragmenten.", bloom: "Begrijpen", rtti: "R", werkwoord: "Onderscheiden", toelichting: "Leerlingen *lezen* fragmenten met verschillende perspectieven en *identificeren* het gebruikte perspectief, met uitleg. Formatief: oefening." },
+                    { id: "v2f5", slo: "KD 9B", omschrijving: "Inzicht in genrekenmerken", tussendoel: "De leerling *herkent* en *benoemt* stijlfiguren zoals vergelijking en metafoor in poëzie en proza.", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen, Benoemen", toelichting: "Leerlingen *zoeken* voorbeelden van stijlfiguren in aangeboden teksten en *leggen uit* wat ze betekenen. Formatief: werkblad." },
+                    { id: "v2f6", slo: "KD 9C", omschrijving: "Literatuur uit verschillende tijden", tussendoel: "De leerling *beschrijft* enkele verschillen in taalgebruik en leefwereld tussen een historisch jeugdboek en een hedendaags jeugdboek.", bloom: "Begrijpen", rtti: "T1", werkwoord: "Beschrijven", toelichting: "Na het lezen van (fragmenten uit) een historisch en een hedendaags jeugdboek *maken* leerlingen een vergelijkend schema. Formatief: klassikale bespreking. <em>Link KD7: Hoe beïnvloedt de cultuur van die tijd het verhaal?</em>" }
+                ]
+            },
+             taalbeschouwing: { 
+                naam: "Taalbeschouwing (incl. Taal & Maatschappij)", 
+                intro: "In VWO 2 wordt het metalinguïstisch bewustzijn verder ontwikkeld. Leerlingen leren complexere relaties tussen taalvorm, betekenis en context (inclusief maatschappelijke context) te doorgronden. Begrippen uit de leerlijn zoals \"tekstverband\", \"directe/indirecte rede\", \"beeldspraak\", \"register\" worden behandeld, alsook aspecten van taalvariatie en taalverandering (KD5). Kerndoelen 6A, 6C, 6D (overtuigingskracht, vwo-aanvulling) en KD5 staan centraal.", 
+                progressie: "De focus verschuift naar het analyseren van taalgebruik in verschillende contexten en genres (I). Leerlingen leren complexere verbanden en stilistische middelen herkennen (R) en begrijpen hoe deze bijdragen aan de betekenis en het effect van een tekst (T1/T2). De introductie van argumentatie (KD 6D) en een dieper begrip van taal in de maatschappij (KD5) legt een basis voor kritische taalvaardigheid. Leerlingen <em>plannen</em> (KD10) hun aanpak voor het analyseren van teksten en <em>evalueren</em> (KD10) de effectiviteit van taalgebruik.", 
+                doelen: [
+                    { id: "v2t1", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *analyseert* hoe woordkeus (bijv. denotatie vs. connotatie, vakjargon) de toon en betekenis van een tekst beïnvloedt.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *vergelijken* twee teksten over hetzelfde onderwerp met verschillende woordkeus (bijv. een nieuwsbericht en een column) en *bespreken* de effecten. Formatief: discussie. <em>Strategie (KD10): Welke stappen zet ik om woordkeus te analyseren?</em>" },
+                    { id: "v2t2", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *herkent* en *benoemt* verschillende soorten tekstverbanden (bijv. oorzaak-gevolg, voor-nadelen, vergelijking) en de bijbehorende signaalwoorden.", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen, Benoemen", toelichting: "Leerlingen *markeren* signaalwoorden in teksten en *benoemen* het type verband. Formatief: oefeningen." },
+                    { id: "v2t3", slo: "KD 6C", omschrijving: "Inzicht in zakelijke genres, vwo", tussendoel: "De leerling *onderscheidt* genrespecifieke kenmerken van taalgebruik in bijvoorbeeld een nieuwsbericht, een interview en een instructieve tekst.", bloom: "Begrijpen", rtti: "T1", werkwoord: "Onderscheiden", toelichting: "Leerlingen *analyseren* voorbeelden van deze genres en *noteren* typische taal- en structuurkenmerken. Summatief: kort verslag van analyse." },
+                    { id: "v2t4", slo: "KD 6D", omschrijving: "Overtuigingskracht van teksten, vwo", tussendoel: "De leerling *identificeert* het standpunt en de belangrijkste argumenten in een eenvoudige betogende tekst.", bloom: "Begrijpen", rtti: "R", werkwoord: "Identificeren", toelichting: "Leerlingen *lezen* een ingezonden brief of kort betoog en *onderstrepen* het standpunt en de argumenten. Formatief: klassikale bespreking." },
+                    { id: "v2t5", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *legt uit* hoe het gebruik van beeldspraak (metaforen, vergelijkingen) een tekst levendiger of overtuigender kan maken.", bloom: "Begrijpen", rtti: "T1", werkwoord: "Uitleggen", toelichting: "Leerlingen *verzamelen* voorbeelden van beeldspraak uit (reclame)teksten en *bespreken* het effect ervan. Formatief: presentatie van voorbeelden." },
+                    { id: "v2t6", slo: "KD 5", omschrijving: "Inzicht in taal en maatschappij", tussendoel: "De leerling *beschrijft* kenmerken van jongerentaal en *vergelijkt* deze met standaardtaal, en *reflecteert* op de functies van jongerentaal.", bloom: "Begrijpen", rtti: "T2", werkwoord: "Beschrijven, Vergelijken, Reflecteren", toelichting: "Leerlingen *onderzoeken* voorbeelden van jongerentaal (bijv. uit muziek, sociale media) en *bespreken* de verschillen en functies (groepsidentiteit, afzetten tegen volwassenen). Formatief: groepsdiscussie of korte presentatie. <em>Reflectie (KD10): Hoe beïnvloedt jongerentaal mijn eigen taalgebruik en identiteit (KD1)?</em>" },
+                    { id: "v2t7", slo: "KD 5", omschrijving: "Inzicht in taal en maatschappij", tussendoel: "De leerling *analyseert* hoe taal wordt gebruikt in reclame om consumenten te beïnvloeden.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *onderzoeken* reclame-uitingen (geschreven, audio, video) en *identificeren* gebruikte taaltechnieken (bijv. superlatieven, aanspreken van emoties, slogans). Summatief: analyse van een reclame. <em>Monitoring (KD10): Welke technieken herken ik? Hoe kritisch ben ik op reclameboodschappen?</em>" }
+                ] 
+            },
+             grammatica: { 
+                naam: "Grammatica", 
+                intro: "Grammatica in VWO 2 bouwt voort op de basiskennis van VWO 1. Complexere zinsdelen (lijdend voorwerp, meewerkend voorwerp, bijwoordelijke bepaling) en woordsoorten (voornaamwoorden, voegwoorden) worden geïntroduceerd. Er is meer aandacht voor de functie van grammaticale structuren. Kerndoel 6B blijft centraal, met verdieping van begrippen (bijv. \"werkwoordelijk gezegde\", \"bijwoordelijke bepaling\", \"persoonlijk voornaamwoord\", \"voegwoord\").", 
+                progressie: "De grammaticale analyse wordt complexer door de introductie van meer zinsdelen en woordsoorten (R/T1). Er is aandacht voor de functie van grammaticale keuzes (actief/passief) (T2). De werkwoordspelling wordt uitgebreid (T1). De stap naar Analyseren/I (effect zinsconstructie) verdiept het inzicht. Leerlingen <em>plannen</em> (KD10) hun aanpak voor complexere zinsontleding en <em>gebruiken</em> strategieën (KD10) om fouten te vermijden.", 
+                doelen: [
+                    { id: "v2g1", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *benoemt* en *onderscheidt* in zinnen het werkwoordelijk gezegde (alle werkwoorden) en het naamwoordelijk gezegde (met koppelwerkwoord).", bloom: "Begrijpen", rtti: "R", werkwoord: "Benoemen, Onderscheiden", toelichting: "Leerlingen *analyseren* zinnen en *identificeren* de verschillende soorten gezegdes. Formatief: zinsontledingsoefeningen. <em>Strategie (KD10): Welke stappen volg ik om het gezegde te vinden?</em>" },
+                    { id: "v2g2", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *identificeert* het lijdend voorwerp, meewerkend voorwerp en de bijwoordelijke bepaling in samengestelde zinnen.", bloom: "Begrijpen", rtti: "R", werkwoord: "Identificeren", toelichting: "Leerlingen *passen* ontleedstrategieën toe om de zinsdelen te *vinden*. Summatief: toets zinsontleding." },
+                    { id: "v2g3", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *herkent* en *benoemt* verschillende soorten voornaamwoorden (persoonlijk, bezittelijk, aanwijzend) en voegwoorden (nevenschikkend, onderschikkend).", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen, Benoemen", toelichting: "Leerlingen *categoriseren* voornaamwoorden en voegwoorden uit tekstfragmenten. Formatief: invuloefeningen." },
+                    { id: "v2g4", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *past* de spellingregels voor de verleden tijd en het voltooid deelwoord van regelmatige en veelvoorkomende onregelmatige werkwoorden correct toe.", bloom: "Toepassen", rtti: "T1", werkwoord: "Toepassen", toelichting: "Leerlingen *schrijven* zinnen in de verleden tijd of voltooide tijd. Summatief: dictee of werkwoordspellingstoets. <em>Reflectie (KD10): Welke onregelmatige werkwoorden vind ik lastig en hoe kan ik die beter onthouden?</em>" },
+                    { id: "v2g5", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *analyseert* hoe de keuze voor een bepaalde zinsconstructie (bijv. actief vs. passief) de nadruk in een zin kan verleggen.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *herschrijven* actieve zinnen naar passieve zinnen (en vice versa) en *bespreken* het effect op de boodschap. Formatief: klassikale oefening." }
+                ] 
+            },
+             leesvaardigheid: { 
+                naam: "Leesvaardigheid", 
+                intro: "In VWO 2 worden leesstrategieën verder ingeoefend en toegepast op complexere en langere teksten, waaronder ook digitale teksten. Er komt meer aandacht voor het onderscheiden van hoofd- en bijzaken, het herkennen van tekststructuren en het kritisch beoordelen van informatie. Kerndoelen 2A en 2B blijven leidend, met een toenemende focus op dieper begrip.", 
+                progressie: "Leerlingen passen leesstrategieën toe op een breder scala aan teksten (T1/T2). De focus verschuift van letterlijk begrip (R) naar het interpreteren van impliciete informatie en het kritisch evalueren van bronnen (I). Analytische vaardigheden (onderscheiden hoofd-/bijzaken, vergelijken) worden belangrijker (I). Leerlingen <em>selecteren en gebruiken bewust leesstrategieën (KD10)</em> afhankelijk van tekst en doel, en <em>evalueren (KD10)</em> de bruikbaarheid van informatie.", 
+                doelen: [
+                    { id: "v2l1", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *onderscheidt* hoofd- en bijzaken in een informatieve tekst van gemiddelde lengte.", bloom: "Analyseren", rtti: "I", werkwoord: "Onderscheiden", toelichting: "Leerlingen *maken* een samenvatting of een schema van een tekst waarin alleen de hoofdzaken zijn opgenomen. Summatief: beoordeling samenvatting/schema. <em>Planning (KD10): Hoe ga ik deze tekst aanpakken om de hoofdzaken te vinden?</em>" },
+                    { id: "v2l2", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *herkent* veelvoorkomende tekststructuren (bijv. probleem-oplossing, voor-nadelen, chronologisch) in informatieve teksten.", bloom: "Begrijpen", rtti: "R", werkwoord: "Herkennen", toelichting: "Leerlingen *analyseren* teksten en *benoemen* de gebruikte structuur, ondersteund door signaalwoorden. Formatief: structuurschema's maken." },
+                    { id: "v2l3", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *leidt* de betekenis van onbekende woorden af uit de context of door gebruik te maken van woordbouw (voor-/achtervoegsels).", bloom: "Toepassen", rtti: "T1", werkwoord: "Afleiden", toelichting: "Tijdens het lezen *markeren* leerlingen onbekende woorden en *proberen* de betekenis te achterhalen met strategieën; daarna controle met woordenboek. Formatief: klassikale bespreking van strategieën. <em>Strategie (KD10): Welke woordraadstrategieën ken ik en wanneer pas ik ze toe?</em>" },
+                    { id: "v2l4", slo: "KD 2B", omschrijving: "Evalueren en reflecteren", tussendoel: "De leerling *beoordeelt* de betrouwbaarheid van een eenvoudige (online) bron aan de hand van enkele criteria (bijv. auteur, datum, doel).", bloom: "Evalueren", rtti: "I", werkwoord: "Beoordelen", toelichting: "Leerlingen *onderzoeken* een website of artikel en *vullen* een checklist in over de betrouwbaarheid. Formatief: klassikale vergelijking van bevindingen. <em>Reflectie (KD10): Hoe zeker ben ik van mijn oordeel over deze bron?</em>" },
+                    { id: "v2l5", slo: "KD 2B", omschrijving: "Evalueren en reflecteren", tussendoel: "De leerling *vergelijkt* informatie over hetzelfde onderwerp uit twee verschillende (korte) teksten en *benoemt* overeenkomsten en verschillen.", bloom: "Analyseren", rtti: "T2", werkwoord: "Vergelijken, Benoemen", toelichting: "Leerlingen *lezen* twee nieuwsberichten over dezelfde gebeurtenis en *noteren* de feitelijke overeenkomsten en verschillen in presentatie. Formatief: groepsdiscussie." }
+                ] 
+            },
+             luisterspreekvaardigheid: { 
+                naam: "Luister- en Spreekvaardigheid", 
+                intro: "De mondelinge vaardigheden worden in VWO 2 verder ontwikkeld richting meer formele en gestructureerde spreeksituaties. Er is aandacht voor presentatietechnieken, het deelnemen aan discussies en het effectief overbrengen van informatie. Kerndoelen 2A, 3A, 4A en 4B worden verder uitgediept. De interactie met anderen vraagt om bewustwording van de eigen communicatieve identiteit (KD1) en die van anderen.", 
+                progressie: "De spreektaken worden complexer en formeler (presentaties, discussies) (T2/I). Er wordt meer aandacht besteed aan voorbereiding, structuur en presentatietechnieken. Analytische vaardigheden (reageren op argumenten, verdiepende vragen stellen) worden aangescherpt (I). Leerlingen <em>plannen</em> (KD10) hun spreekbijdragen, <em>monitoren</em> (KD10) hun verstaanbaarheid en <em>gebruiken feedback (KD10)</em> om hun presentaties te verbeteren.", 
+                doelen: [
+                    { id: "v2ls1", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *maakt* gestructureerde aantekeningen tijdens het luisteren naar een informatieve presentatie of instructie.", bloom: "Toepassen", rtti: "T1", werkwoord: "Maken", toelichting: "Tijdens een gastles of een presentatie van een medeleerling *maken* leerlingen aantekeningen volgens een aangereikt format (bijv. Cornell-methode). Formatief: vergelijken van aantekeningen. <em>Strategie (KD10): Welke aantekenstrategie werkt voor mij het best?</em>" },
+                    { id: "v2ls2", slo: "KD 3A", omschrijving: "Doelgericht spreken", tussendoel: "De leerling *geeft* een korte, voorbereide presentatie (ca. 3-5 minuten) over een zelfgekozen onderwerp, met gebruik van spiekbriefje.", bloom: "Toepassen", rtti: "T1", werkwoord: "Geven", toelichting: "Leerlingen *bereiden* een presentatie voor, *oefenen* deze en *geven* de presentatie voor de klas. Summatief: beoordeling presentatie op inhoud, structuur en presentatievaardigheden. <em>Planning & Reflectie (KD10): Hoe bereid ik me goed voor? Wat ging goed, wat kan beter volgende keer?</em>" },
+                    { id: "v2ls3", slo: "KD 3A", omschrijving: "Doelgericht spreken", tussendoel: "De leerling *gebruikt* passende intonatie en volume om een boodschap duidelijk over te brengen tijdens het spreken.", bloom: "Toepassen", rtti: "T1", werkwoord: "Gebruiken", toelichting: "Tijdens spreekopdrachten *letten* leerlingen bewust op hun stemgebruik. Formatief: feedback van docent en peers." },
+                    { id: "v2ls4", slo: "KD 4A", omschrijving: "Doelgericht gesprekken voeren", tussendoel: "De leerling *neemt deel* aan een klassikale discussie door te reageren op argumenten van anderen en eigen argumenten respectvol in te brengen.", bloom: "Analyseren", rtti: "T2", werkwoord: "Deelnemen", toelichting: "Naar aanleiding van een stelling *voeren* leerlingen een geleide discussie. Formatief: observatie van deelname en argumentatiekwaliteit." },
+                    { id: "v2ls5", slo: "KD 4B", omschrijving: "Gesprekken voeren om te leren", tussendoel: "De leerling *stelt* verdiepende vragen om een onderwerp beter te begrijpen tijdens een groepsgesprek of interview.", bloom: "Analyseren", rtti: "T2", werkwoord: "Stellen", toelichting: "Tijdens een groepsopdracht of het voorbereiden van een interview *oefenen* leerlingen met het stellen van open en doorvragen. Formatief: observatie." }
+                ] 
+            },
+             schrijfvaardigheid: { 
+                naam: "Schrijfvaardigheid", 
+                intro: "In VWO 2 werken leerlingen aan het schrijven van langere en meer gestructureerde teksten, zoals een eenvoudig verslag of een betogende alinea. Er is aandacht voor het plannen van het schrijfproces, het verzamelen van informatie en het geven en verwerken van feedback. Kerndoelen 3A, 3B en 3C worden verder ontwikkeld. Het schrijven kan ook dienen als middel om te reflecteren op culturele onderwerpen (KD7) of persoonlijke identiteitsaspecten (KD1).", 
+                progressie: "De schrijfproducten worden langer en vereisen meer planning en structuur (T2/I). Leerlingen leren informatie te verwerken en te presenteren in verschillende tekstsoorten. De vaardigheid om feedback te geven en te verwerken (Evalueren/I) wordt ontwikkeld. Creatief schrijven wordt uitgedaagd door de eis van bewuste toepassing van stijlmiddelen (I). Het <em>schrijfproces (plannen, stellen, reviseren - KD10)</em> wordt explicieter en systematischer geoefend.", 
+                doelen: [
+                    { id: "v2s1", slo: "KD 3A", omschrijving: "Doelgericht schrijven", tussendoel: "De leerling *schrijft* een eenvoudig, informatief verslag (bijv. van een proefje of excursie) met een duidelijke inleiding, kern en slot.", bloom: "Toepassen", rtti: "T1", werkwoord: "Schrijven", toelichting: "Na een activiteit *schrijven* leerlingen een verslag volgens een vast format. Summatief: beoordeling verslag op structuur en inhoud. <em>Planning (KD10): Welke informatie moet in welk deel van mijn verslag?</em>" },
+                    { id: "v2s2", slo: "KD 3A", omschrijving: "Doelgericht schrijven", tussendoel: "De leerling *formuleert* een alinea met een duidelijke kernzin en ondersteunende zinnen.", bloom: "Toepassen", rtti: "T1", werkwoord: "Formuleren", toelichting: "Leerlingen *oefenen* met het schrijven van alinea's over gegeven onderwerpen, met focus op structuur. Formatief: peer-review op alineastructuur." },
+                    { id: "v2s3", slo: "KD 3B", omschrijving: "Creatief taal gebruiken", tussendoel: "De leerling *schrijft* een gedicht of een kort verhaal waarin bewust gebruik wordt gemaakt van een stijlfiguur (bijv. vergelijking, metafoor).", bloom: "Creëren", rtti: "I", werkwoord: "Schrijven", toelichting: "Na uitleg over stijlfiguren *schrijven* leerlingen een creatieve tekst waarin ze deze toepassen. Summatief: beoordeling op creativiteit en correcte toepassing." },
+                    { id: "v2s4", slo: "KD 3C", omschrijving: "Schrijven om te leren", tussendoel: "De leerling *maakt* een gestructureerde samenvatting van een informatieve tekst van gemiddelde lengte.", bloom: "Analyseren", rtti: "T2", werkwoord: "Maken", toelichting: "Leerlingen *lezen* een tekst en *schrijven* een samenvatting waarin hoofd- en bijzaken correct zijn onderscheiden en geordend. Summatief: beoordeling samenvatting." },
+                    { id: "v2s5", slo: "KD 3A", omschrijving: "Reviseren van teksten", tussendoel: "De leerling *geeft* constructieve feedback aan een medeleerling op een geschreven tekst aan de hand van criteria (bijv. inhoud, structuur, taalgebruik).", bloom: "Evalueren", rtti: "I", werkwoord: "Geven", toelichting: "Leerlingen *lezen* elkaars teksten en *geven* feedback met behulp van een checklist. Formatief: kwaliteit van de gegeven feedback. <em>Reflectie (KD10): Hoe kan ik mijn feedback zo formuleren dat de ander er echt iets aan heeft?</em>" }
+                ] 
+            },
+        }
+    },
+    vwo3: { 
+        introductie: "In het derde leerjaar van het VWO wordt toegewerkt naar de vaardigheden en kennis die nodig zijn voor de bovenbouw. De nadruk ligt op zelfstandigheid, kritisch denken en het integreren van verschillende taalvaardigheden. Leerlingen werken met complexere teksten en opdrachten, en er wordt een hogere mate van abstractie en reflectie verwacht, inclusief reflectie op de eigen (talige) identiteit, de rol van taal in maatschappij en cultuur, en het eigen leerproces.",
+        themas: {
+            fictie: {
+                naam: "Fictie (Literatuur)",
+                intro: "Fictieonderwijs in VWO 3 richt zich op het verdiepen van literair begrip en het ontwikkelen van een meer analytische en kritische houding ten opzichte van literaire teksten. Leerlingen maken kennis met complexere verhaaltechnieken, thematiek en de relatie tussen literatuur en context (KD7, KD1). De overstap naar literatuur voor volwassenen wordt voorbereid. Alle relevante kerndoelen (8A, 8B, 9A, 9B, 9C, en de vwo-aanvulling 9D: literatuur in tijd en context) komen aan bod.",
+                progressie: "De teksten worden complexer (ook beginnende volwassenenliteratuur). Leerlingen ontwikkelen een meer verfijnd analytisch en evaluatief vermogen (I). Er is expliciete aandacht voor de relatie tussen literatuur, tijd en context (KD 9D) (T2/I). De argumentatie over literatuur wordt aangescherpt (I). Leerlingen <em>sturen hun eigen leesproces (KD10)</em>, kiezen complexere werken en <em>reflecteren diepgaand (KD10)</em> op de betekenis en impact van literatuur.",
+                doelen: [
+                    { id: "v3f1", slo: "KD 8A", omschrijving: "Ontwikkelen leesvoorkeur", tussendoel: "De leerling *beargumenteert* zijn/haar persoonlijke waardering voor een gelezen boek of verhaal, gebruikmakend van literaire argumenten (bijv. stijl, personages, spanning, thematiek).", bloom: "Evalueren", rtti: "I", werkwoord: "Beargumenteren", toelichting: "Leerlingen *schrijven* een uitgebreide boekrecensie of *houden* een mondelinge boekbespreking waarin ze hun oordeel onderbouwen. Summatief: recensie/presentatie. <em>Reflectie (KD10): Hoe heeft mijn literaire smaak zich ontwikkeld? Welke argumenten vind ik zelf overtuigend?</em>" },
+                    { id: "v3f2", slo: "KD 8B", omschrijving: "Verkennen waarde literatuur", tussendoel: "De leerling *analyseert* hoe een literair werk universele thema’s (bijv. liefde, dood, identiteit) verbeeldt en relateert dit aan eigen ervaringen of de actualiteit.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren, Relateren", toelichting: "Na het lezen van een boek *discussiëren* leerlingen in groepen over de thematiek en de relevantie ervan. Formatief: deelname aan discussie. <em>Link KD1/KD7: Hoe helpt dit werk mij mijn eigen identiteit of cultuur, of die van anderen, beter te begrijpen?</em>" },
+                    { id: "v3f3", slo: "KD 9A", omschrijving: "Inzicht in verhalende teksten", tussendoel: "De leerling *evalueert* de geloofwaardigheid en complexiteit van personages en hun ontwikkeling in een roman of novelle.", bloom: "Evalueren", rtti: "I", werkwoord: "Evalueren", toelichting: "Leerlingen *schrijven* een personageanalyse waarin ze de psychologische ontwikkeling en motieven van een personage kritisch beschouwen. Summatief: analyse." },
+                    { id: "v3f4", slo: "KD 9B", omschrijving: "Inzicht in genrekenmerken", tussendoel: "De leerling *analyseert* het effect van specifieke genrekenmerken (bijv. ironie in satire, enjambement in poëzie) op de betekenis en de leeservaring.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *bestuderen* teksten waarin deze kenmerken voorkomen en *leggen uit* welk effect de schrijver hiermee beoogt. Formatief: tekstannotaties en -bespreking." },
+                    { id: "v3f5", slo: "KD 9C", omschrijving: "Literatuur uit verschillende tijden", tussendoel: "De leerling *vergelijkt* de weergave van een maatschappelijk thema (bijv. armoede, oorlog) in een historische literaire tekst met een hedendaagse tekst.", bloom: "Analyseren", rtti: "I", werkwoord: "Vergelijken", toelichting: "Leerlingen *lezen* twee teksten uit verschillende periodes en *presenteren* hun vergelijkende analyse. Formatief: presentatie." },
+                    { id: "v3f6", slo: "KD 9D", omschrijving: "Literatuur in tijd en context, vwo", tussendoel: "De leerling *beschrijft* hoe de historische en culturele context van een literair werk (bijv. een verhaal uit de Middeleeuwen) de inhoud en vorm ervan heeft beïnvloed.", bloom: "Begrijpen", rtti: "T2", werkwoord: "Beschrijven", toelichting: "Na achtergrondinformatie over een periode *analyseren* leerlingen hoe elementen uit die context terugkomen in een literaire tekst. Formatief: werkstukje." }
+                ]
+            },
+             taalbeschouwing: { 
+                naam: "Taalbeschouwing (incl. Taal & Maatschappij)", 
+                intro: "Taalbeschouwing in VWO 3 is gericht op het kritisch analyseren van taalgebruik in complexe en diverse contexten, inclusief media en maatschappelijke discussies. Leerlingen reflecteren op de macht van taal en de manieren waarop taal kan worden ingezet om te overtuigen, te manipuleren of te representeren (KD5). Begrippen zoals \"framing\", \"retorica\", \"argumentatiestructuren\" en \"taalvariatie\" zijn relevant. Kerndoelen 6A, 6C en 6D worden op een hoger niveau benaderd.", 
+                progressie: "De focus ligt op kritische analyse en evaluatie van taalgebruik in authentieke, vaak complexe, contexten (I). Leerlingen ontwikkelen een dieper inzicht in de persuasieve en representatieve functies van taal. Argumentatieleer wordt verder uitgediept. Leerlingen <em>plannen (KD10) hun analyses</em>, <em>monitoren (KD10) de betrouwbaarheid van bronnen</em>, en <em>reflecteren (KD10) kritisch op taalgebruik en de maatschappelijke implicaties ervan</em>.", 
+                doelen: [
+                    { id: "v3t1", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *analyseert* hoe framing (woordkeus, beeldspraak, focus) de perceptie van een onderwerp in nieuwsberichten of opiniestukken kan sturen.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *vergelijken* verschillende nieuwsartikelen over hetzelfde evenement en *identificeren* verschillen in framing en de mogelijke effecten daarvan. Summatief: analyseverslag. <em>Monitoring (KD10): Hoe herken ik framing? Ben ik me bewust van de sturing?</em>" },
+                    { id: "v3t2", slo: "KD 6C", omschrijving: "Inzicht in zakelijke genres, vwo", tussendoel: "De leerling *evalueert* de effectiviteit van genrekenmerken (bijv. structuur, stijl, toon) in een zakelijke tekst (bijv. sollicitatiebrief, reclamefolder) in relatie tot doel en doelgroep.", bloom: "Evalueren", rtti: "I", werkwoord: "Evalueren", toelichting: "Leerlingen *beoordelen* voorbeelden van zakelijke teksten op hun effectiviteit en *onderbouwen* hun oordeel. Formatief: peer-review van elkaars beoordelingen." },
+                    { id: "v3t3", slo: "KD 6D", omschrijving: "Overtuigingskracht van teksten, vwo", tussendoel: "De leerling *analyseert* de argumentatiestructuur (enkelvoudig, meervoudig, nevenschikkend, onderschikkend) in een betogende tekst.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *ontleden* een betoog en *visualiseren* de argumentatiestructuur (bijv. in een schema). Formatief: schema en bespreking." },
+                    { id: "v3t4", slo: "KD 6D", omschrijving: "Overtuigingskracht van teksten, vwo", tussendoel: "De leerling *herkent* en *benoemt* veelvoorkomende drogredenen in discussies of betogende teksten.", bloom: "Onthouden", rtti: "R", werkwoord: "Herkennen, Benoemen", toelichting: "Leerlingen *bestuderen* voorbeelden van drogredenen en *identificeren* deze in aangeleverd materiaal (bijv. debatfragmenten). Formatief: quiz of oefening." },
+                    { id: "v3t5", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *reflecteert* op de invloed van taalvariatie (dialect, sociolect, jongerentaal) op communicatie en identiteitsvorming.", bloom: "Evalueren", rtti: "I", werkwoord: "Reflecteren", toelichting: "Na bestudering van voorbeelden *schrijven* leerlingen een essay of *voeren* een debat over de rol en waardering van taalvariëteiten. Summatief: essay/deelname debat. <em>Link KD1/KD5: Hoe beïnvloedt mijn taalgebruik hoe anderen mij zien, en hoe zie ik anderen op basis van hun taalgebruik?</em>" },
+                    { id: "v3t6", slo: "KD 5", omschrijving: "Inzicht in taal en maatschappij", tussendoel: "De leerling *analyseert* hoe taal wordt gebruikt om machtsverhoudingen uit te drukken of te bestendigen in maatschappelijke contexten (bijv. politiek, media).", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *onderzoeken* nieuwsberichten, politieke speeches of columns op taalgebruik dat machtsverhoudingen suggereert of bevraagt. Formatief: discussie en presentatie van bevindingen. <em>Planning (KD10): Welke bronnen heb ik nodig? Hoe ga ik mijn analyse structureren?</em>" },
+                    { id: "v3t7", slo: "KD 5", omschrijving: "Inzicht in taal en maatschappij", tussendoel: "De leerling *evalueert* de rol van standaardtaal en taalnormen in de samenleving en *beargumenteert* een eigen standpunt hierover.", bloom: "Evalueren", rtti: "I", werkwoord: "Evalueren, Beargumenteren", toelichting: "Na bestudering van artikelen over taalnormen en -variatie, *voeren* leerlingen een debat of *schrijven* een opiniestuk over de wenselijkheid van een strikte taalnorm. Summatief: deelname debat/opiniestuk. <em>Reflectie (KD10): Hoe beïnvloeden mijn eigen ervaringen mijn standpunt hierover? Kan ik mijn standpunt goed onderbouwen?</em>" }
+                ] 
+            },
+             grammatica: { 
+                naam: "Grammatica", 
+                intro: "In VWO 3 wordt de grammaticale kennis geconsolideerd en toegepast in complexere taalsituaties. Er is aandacht voor de finesses van zinsbouw, de correcte toepassing van complexe spellingsregels en het functioneel inzetten van grammaticale kennis ter ondersteuning van andere taalvaardigheden. Kerndoel 6B blijft centraal, waarbij de toepassing van begrippen (bijv. \"samengestelde zin\", \"hoofdzin/bijzin\", \"congruentie\") wordt verfijnd.", 
+                progressie: "De nadruk ligt op het toepassen van grammaticale kennis in complexere zinnen en teksten (T2), en op het ontwikkelen van een metacognitief bewustzijn ten aanzien van eigen taalgebruik en foutenpatronen (KD10, I). De functionele inzet van grammatica voor effectieve communicatie staat voorop. Leerlingen <em>gebruiken hulpmiddelen (KD10)</em> (grammaticaboek, online tools) om hun grammaticale correctheid te verbeteren.", 
+                doelen: [
+                    { id: "v3g1", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *analyseert* samengestelde zinnen en *onderscheidt* daarin hoofd- en bijzinnen, en de functie van voegwoorden.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren, Onderscheiden", toelichting: "Leerlingen *ontleden* complexe zinnen en *benoemen* de verschillende onderdelen en hun relaties. Summatief: toets zinsontleding." },
+                    { id: "v3g2", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *past* de regels voor congruentie (onderwerp-persoonsvorm) correct toe in complexe zinnen met meervoudige onderwerpen of inversie.", bloom: "Toepassen", rtti: "T2", werkwoord: "Toepassen", toelichting: "Leerlingen *corrigeren* zinnen met congruentiefouten of *schrijven* zelf complexe zinnen met correcte congruentie. Formatief: schrijfoefeningen." },
+                    { id: "v3g3", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *gebruikt* interpunctie (komma's, puntkomma's, dubbele punten, aanhalingstekens) correct en functioneel om de structuur en leesbaarheid van eigen teksten te verbeteren.", bloom: "Toepassen", rtti: "T2", werkwoord: "Gebruiken", toelichting: "Bij het schrijven van langere teksten (zie Schrijfvaardigheid) *besteden* leerlingen expliciet aandacht aan correcte en functionele interpunctie. Formatief: revisieopdrachten." },
+                    { id: "v3g4", slo: "KD 6B", omschrijving: "Spelling, formulering, interpunctie", tussendoel: "De leerling *reflecteert* op eigen grammaticale en spellingsfouten en *formuleert* strategieën om deze in de toekomst te vermijden.", bloom: "Evalueren", rtti: "I", werkwoord: "Reflecteren, Formuleren", toelichting: "Leerlingen *analyseren* hun fouten in eerder werk en *stellen* een persoonlijk verbeterplan op. Formatief: bespreking van verbeterplannen. <em>Dit is een kernactiviteit voor KD10.</em>" },
+                    { id: "v3g5", slo: "KD 6A", omschrijving: "Vorm en betekenis beschouwen", tussendoel: "De leerling *evalueert* de helderheid en correctheid van formuleringen in eigen en andermans teksten en *doet* concrete verbetervoorstellen.", bloom: "Evalueren", rtti: "I", werkwoord: "Evalueren, Doen", toelichting: "Leerlingen *geven* gedetailleerde feedback op elkaars teksten, specifiek gericht op formulering, en *herschrijven* delen van hun eigen tekst. Summatief: gereviseerde tekst." }
+                ] 
+            },
+             leesvaardigheid: { 
+                naam: "Leesvaardigheid", 
+                intro: "Leesvaardigheid in VWO 3 bereidt leerlingen voor op de eisen van de bovenbouw. Dit betekent het kunnen lezen en analyseren van langere, abstractere en meer gelaagde teksten, inclusief betogen en beschouwingen. Kritisch evalueren van informatie, het synthetiseren van informatie uit meerdere bronnen en het reflecteren op de intenties van de auteur worden belangrijke vaardigheden. Kerndoelen 2A en 2B worden op het hoogste niveau binnen de onderbouw aangepakt.", 
+                progressie: "Leerlingen worden uitgedaagd met complexere, abstractere en meer opiniërende teksten. De nadruk ligt op diepgaande analyse (I), kritische evaluatie (I) en het synthetiseren van informatie (I). Zelfreflectie op het eigen leesproces wordt gestimuleerd (KD10, I). De stap naar Creëren/I (synthetiseren) is een belangrijke voorbereiding op academische vaardigheden.", 
+                doelen: [
+                    { id: "v3l1", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *analyseert* de opbouw en argumentatiestructuur van een betogende of beschouwende tekst.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Leerlingen *maken* een gedetailleerd schema van de tekststructuur en de argumentatielijn. Summatief: analyseopdracht. <em>Planning (KD10): Welke stappen ga ik zetten om deze complexe tekst te doorgronden?</em>" },
+                    { id: "v3l2", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *interpreteert* impliciete informatie, ironie en de diepere bedoeling van de auteur in complexere teksten.", bloom: "Analyseren", rtti: "I", werkwoord: "Interpreteren", toelichting: "Na het lezen van een gelaagde tekst (bijv. een column, essay) *discussiëren* leerlingen over mogelijke interpretaties en de intentie van de schrijver. Formatief: klassengesprek." },
+                    { id: "v3l3", slo: "KD 2B", omschrijving: "Evalueren en reflecteren", tussendoel: "De leerling *evalueert* de kwaliteit en overtuigingskracht van argumentatie in een betogende tekst, mede door drogredenen te herkennen.", bloom: "Evalueren", rtti: "I", werkwoord: "Evalueren", toelichting: "Leerlingen *beoordelen* een betoog op de validiteit van de argumenten en de aanwezigheid van drogredenen, en *onderbouwen* hun oordeel. Summatief: kritische leesopdracht." },
+                    { id: "v3l4", slo: "KD 2B", omschrijving: "Evalueren en reflecteren", tussendoel: "De leerling *synthetiseert* informatie uit meerdere (digitale) bronnen over een complex onderwerp tot een coherent overzicht.", bloom: "Creëren", rtti: "I", werkwoord: "Synthetiseren", toelichting: "Voor een onderzoekje *verzamelen* en *verwerken* leerlingen informatie uit diverse bronnen en *presenteren* dit in een eigen tekst of presentatie. Summatief: onderzoeksverslag. <em>Monitoring (KD10): Hoe beoordeel ik de bruikbaarheid en betrouwbaarheid van mijn bronnen tijdens het verzamelen?</em>" },
+                    { id: "v3l5", slo: "KD 2B", omschrijving: "Evalueren en reflecteren", tussendoel: "De leerling *reflecteert* kritisch op de eigen leesaanpak en *past* deze waar nodig aan om complexe teksten effectiever te kunnen verwerken.", bloom: "Evalueren", rtti: "I", werkwoord: "Reflecteren, Aanpassen", toelichting: "Na een lastige leestaak *evalueren* leerlingen hun aanpak en *formuleren* verbeterpunten voor toekomstige taken. Formatief: reflectieverslagje. <em>Dit is een kernactiviteit voor KD10.</em>" }
+                ] 
+            },
+             luisterspreekvaardigheid: { 
+                naam: "Luister- en Spreekvaardigheid", 
+                intro: "In VWO 3 wordt van leerlingen verwacht dat zij zelfstandig en effectief kunnen communiceren in meer formele en complexe mondelinge situaties, zoals het houden van een betogende spreekbeurt, het leiden van een discussie of het voeren van een kritisch interview. De nadruk ligt op heldere argumentatie, retorische vaardigheden en interactie. Kerndoelen 2A, 3A, 4A en 4B worden op een gevorderd niveau getraind. Het bewustzijn van de eigen communicatieve stijl en de impact daarvan op anderen (KD1) wordt verder ontwikkeld.", 
+                progressie: "De mondelinge taken worden complexer, vereisen meer zelfstandigheid en een hoger niveau van abstractie en argumentatie (I). Leerlingen ontwikkelen vaardigheden in het leiden van gesprekken en het toepassen van retorische strategieën (T2/I). De stap naar Creëren/I (betogende spreekbeurt) en Evalueren/I (leiden discussie) markeert een significante ontwikkeling. Leerlingen <em>plannen (KD10) hun spreekbeurten en debatten grondig</em>, <em>monitoren (KD10) de reacties van hun publiek</em> en <em>reflecteren (KD10) op de effectiviteit van hun optreden</em>.", 
+                doelen: [
+                    { id: "v3ls1", slo: "KD 2A", omschrijving: "Begrip van teksten", tussendoel: "De leerling *analyseert* de argumentatie en retorische middelen in een beluisterd betoog of debat.", bloom: "Analyseren", rtti: "I", werkwoord: "Analyseren", toelichting: "Na het beluisteren van een speech of debatfragment *identificeren* leerlingen de hoofdargumenten, ondersteunende argumenten en gebruikte retorische technieken. Formatief: analyseopdracht. <em>Strategie (KD10): Welke luisterstrategie pas ik toe om complexe argumentatie te volgen?</em>" },
+                    { id: "v3ls2", slo: "KD 3A", omschrijving: "Doelgericht spreken", tussendoel: "De leerling *houdt* een goed gestructureerde en overtuigende betogende spreekbeurt (ca. 5-7 minuten) over een actueel onderwerp, met adequate bronvermelding.", bloom: "Creëren", rtti: "I", werkwoord: "Houden", toelichting: "Leerlingen *onderzoeken* een onderwerp, *bereiden* een betoog voor en *presenteren* dit voor de klas. Summatief: beoordeling spreekbeurt op inhoud, structuur, argumentatie en presentatie. <em>Planning & Reflectie (KD10): Hoe structureer ik mijn betoog logisch? Hoe ga ik om met spreekangst? Wat zijn mijn sterke punten en verbeterpunten na afloop?</em>" },
+                    { id: "v3ls3", slo: "KD 3A", omschrijving: "Doelgericht spreken", tussendoel: "De leerling *past* retorische middelen (bijv. drieslag, retorische vraag, framing) bewust toe om de overtuigingskracht van een eigen spreektekst te vergroten.", bloom: "Toepassen", rtti: "T2", werkwoord: "Toepassen", toelichting: "Tijdens de voorbereiding van een spreekbeurt *integreren* leerlingen bewust enkele retorische middelen. Formatief: feedback op concepttekst." },
+                    { id: "v3ls4", slo: "KD 4A", omschrijving: "Doelgericht gesprekken voeren", tussendoel: "De leerling *leidt* een kort groepsgesprek of discussie, zorgt voor een duidelijke structuur en stimuleert actieve deelname van alle groepsleden.", bloom: "Evalueren", rtti: "I", werkwoord: "Leiden", toelichting: "In groepjes *bereiden* leerlingen een discussie voor, waarbij één leerling als voorzitter optreedt. Formatief: observatie van voorzittersrol en groepsdynamiek." },
+                    { id: "v3ls5", slo: "KD 4B", omschrijving: "Gesprekken voeren om te leren", tussendoel: "De leerling *formuleert* kritische en doorvragen tijdens een interview of een expertgesprek om diepgaande informatie te verkrijgen.", bloom: "Analyseren", rtti: "I", werkwoord: "Formuleren", toelichting: "Leerlingen *bereiden* een interview voor (bijv. met een docent over diens vakgebied) en *oefenen* met het stellen van kritische en verdiepende vragen. Summatief: uitgewerkt interviewverslag." }
+                ] 
+            },
+             schrijfvaardigheid: { 
+                naam: "Schrijfvaardigheid", 
+                intro: "Schrijfvaardigheid in VWO 3 richt zich op het produceren van complexere, goed gestructureerde en beargumenteerde teksten, zoals een betoog, een beschouwing of een onderzoeksverslagje. Er is veel aandacht voor het schrijfproces (plannen, schrijven, reviseren), brongebruik, en het aanpassen van stijl en toon aan doel en publiek. Alle kerndoelen (3A, 3B, 3C) worden op een gevorderd niveau geïntegreerd. Teksten kunnen ook een platform bieden voor het exploreren van identiteitsvragen (KD1) of culturele reflecties (KD7).", 
+                progressie: "De schrijfopdrachten worden omvangrijker, complexer en vereisen een grotere mate van zelfstandigheid en kritische reflectie (I). Leerlingen leren argumentatieve en beschouwende teksten te schrijven, bronnen te integreren en hun eigen schrijfproces te managen (KD10). De nadruk op revisie en reflectie (Evalueren/I) is cruciaal voor de ontwikkeling tot een competente schrijver.", 
+                doelen: [
+                    { id: "v3s1", slo: "KD 3A", omschrijving: "Doelgericht schrijven", tussendoel: "De leerling *schrijft* een samenhangend betoog of een beschouwing (ca. 300-500 woorden) over een actueel onderwerp, met een duidelijke stellingname/hoofdvraag, onderbouwde argumenten/verschillende perspectieven en een passende conclusie.", bloom: "Creëren", rtti: "I", werkwoord: "Schrijven", toelichting: "Leerlingen *doorlopen* het volledige schrijfproces (oriëntatie, planning, schrijven, revisie) voor een betogende of beschouwende tekst. Summatief: beoordeling eindproduct op inhoud, structuur, argumentatie en taalverzorging. <em>Planning & Monitoring (KD10): Maak een schrijfplan. Controleer tussentijds of de argumentatie nog logisch is en de structuur helder.</em>" },
+                    { id: "v3s2", slo: "KD 3A", omschrijving: "Doelgericht schrijven", tussendoel: "De leerling *integreert* informatie uit verschillende bronnen (met correcte bronvermelding) op een functionele manier in een eigen tekst.", bloom: "Toepassen", rtti: "T2", werkwoord: "Integreren", toelichting: "Bij het schrijven van een werkstuk of betoog *gebruiken* leerlingen informatie uit minimaal twee bronnen en *verwijzen* hier correct naar. Formatief: controle brongebruik." },
+                    { id: "v3s3", slo: "KD 3B", omschrijving: "Creatief taal gebruiken", tussendoel: "De leerling *experimenteert* met verschillende stijlen en vormen van taal (bijv. ironisch, formeel, poëtisch) in een eigen creatieve schrijfopdracht.", bloom: "Creëren", rtti: "I", werkwoord: "Experimenteren", toelichting: "Leerlingen *schrijven* bijvoorbeeld een parodie, een formele klachtenbrief over een absurd onderwerp, of een gedicht in een specifieke vorm. Summatief: beoordeling op originaliteit en stijlbeheersing." },
+                    { id: "v3s4", slo: "KD 3C", omschrijving: "Schrijven om te leren", tussendoel: "De leerling *schrijft* een reflectieverslag waarin hij/zij het eigen leerproces (bijv. bij een project of complexe taak) analyseert en evalueert.", bloom: "Evalueren", rtti: "I", werkwoord: "Schrijven", toelichting: "Na afronding van een groter project *schrijven* leerlingen een individueel reflectieverslag over hun aanpak, samenwerking, en leerpunten. Formatief: feedback op diepgang reflectie. <em>Dit is een kernactiviteit voor KD10.</em>" },
+                    { id: "v3s5", slo: "KD 3A", omschrijving: "Reviseren van teksten", tussendoel: "De leerling *reviseert* de eigen tekst grondig op inhoud, structuur, stijl en taalverzorging, mede op basis van peer-feedback en feedback van de docent.", bloom: "Evalueren", rtti: "I", werkwoord: "Reviseren", toelichting: "Leerlingen *verwerken* systematisch feedback in hun conceptteksten en *onderbouwen* hun keuzes bij de revisie. Summatief: vergelijking concept en definitieve versie. <em>Strategie & Reflectie (KD10): Welke revisiestrategieën gebruik ik? Hoe helpt de feedback mij om mijn tekst te verbeteren?</em>" }
+                ] 
+            },
+        }
+    }
+};
+
+const bloomNiveaus = ["Onthouden", "Begrijpen", "Toepassen", "Analyseren", "Evalueren", "Creëren"];
+const bloomKleuren = {
+    "Onthouden": 'rgba(54, 162, 235, 0.7)',  // Blauw
+    "Begrijpen": 'rgba(75, 192, 192, 0.7)',  // Groen
+    "Toepassen": 'rgba(255, 206, 86, 0.7)', // Geel
+    "Analyseren": 'rgba(255, 159, 64, 0.7)', // Oranje
+    "Evalueren": 'rgba(153, 102, 255, 0.7)',// Paars
+    "Creëren": 'rgba(255, 99, 132, 0.7)'   // Rood
+};
+
+let currentChart = null;
+const tooltipEl = document.getElementById('tooltip');
+
+// --- Gemini API Functions ---
+
+const modal = document.getElementById('gemini-modal');
+const modalTitle = document.getElementById('modal-title');
+const modalBody = document.getElementById('modal-body');
+const modalCloseButton = document.getElementById('modal-close-button');
+
+function showModal() {
+    modal.classList.add('visible');
+}
+
+function hideModal() {
+    modal.classList.remove('visible');
+}
+
+modalCloseButton.addEventListener('click', hideModal);
+modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+        hideModal();
+    }
+});
+
+async function callGemini(prompt) {
+    modalBody.innerHTML = '<div class="spinner"></div><p class="text-center text-stone-600">Suggesties worden geladen...</p>';
+    showModal();
+
+    try {
+        const apiKey = ""; // API key is handled by the environment
+        // De URL verwijst nu naar uw eigen proxy-functie op Netlify/Vercel.
+        const apiUrl = 'https://leerlijnonderbouw.netlify.com/api/gemini-proxy'; 
+
+        // De payload bevat nu alleen de prompt
+        const payload = { prompt: prompt };
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`API verzoek mislukt met status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.candidates && result.candidates.length > 0 &&
+            result.candidates[0].content && result.candidates[0].content.parts &&
+            result.candidates[0].content.parts.length > 0) {
+            const text = result.candidates[0].content.parts[0].text;
+            modalBody.innerHTML = marked.parse(text); // Use marked to parse Markdown
+        } else {
+            // Handle cases where the response structure is unexpected or content is missing
+            console.error("Onverwachte API respons structuur:", result);
+            modalBody.innerHTML = '<p class="text-red-600">Er is een fout opgetreden bij het verwerken van het antwoord. De structuur van de data is onverwacht.</p>';
+        }
+    } catch (error) {
+        console.error("Fout bij het aanroepen van de Gemini API:", error);
+        modalBody.innerHTML = `<p class="text-red-600">Er is een fout opgetreden: ${error.message}. Controleer de browser console voor meer details.</p>`;
+    }
+}
+
+
+function generateLeeractiviteiten(leerjaar, doel) {
+    modalTitle.innerText = "Suggesties voor Leeractiviteiten ✨";
+    const prompt = `Je bent een ervaren en creatieve docent Nederlands in het Nederlandse VWO. Genereer 3 gevarieerde en concrete leeractiviteiten voor een leerling in ${leerjaar.toUpperCase()}. De activiteiten moeten passen bij het volgende tussendoel: "${doel.tussendoel.replace(/\*/g, '')}". Houd rekening met het cognitieve niveau: ${doel.bloom} (${doel.rtti}). Formatteer je antwoord in Markdown met bullet points. Maak de activiteiten praktisch en inspirerend voor de docent.`;
+    callGemini(prompt);
+}
+
+function generateBeoordelingscriteria(leerjaar, doel) {
+    modalTitle.innerText = "Suggesties voor Beoordelingscriteria ✨";
+    const prompt = `Je bent een deskundige op het gebied van toetsing en curriculumontwikkeling voor het vak Nederlands in het Nederlandse VWO. Genereer een eenvoudige rubric of een checklist met 3 tot 5 concrete beoordelingscriteria voor een leerling in ${leerjaar.toUpperCase()}. De criteria moeten de beheersing van het volgende tussendoel meten: "${doel.tussendoel.replace(/\*/g, '')}". Houd rekening met het cognitieve niveau: ${doel.bloom} (${doel.rtti}). Formatteer je antwoord in Markdown. De criteria moeten observeerbaar en helder geformuleerd zijn.`;
+    callGemini(prompt);
+}
+
+
+// --- Original Application Functions (with modifications) ---
+
+function activateTab(tabId) {
+    document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.toggle('active', button.dataset.tab === tabId);
+    });
+    if (tabId === 'tab-kerndoel-progressie') {
+        renderKerndoelProgressieTabel();
+    }
+}
+
+function activateLeerjaarTab(leerjaarKey) {
+    document.querySelectorAll('#leerjaar-nav .sub-tab-button').forEach(button => {
+        button.classList.toggle('active', button.dataset.leerjaar === leerjaarKey);
+    });
+    renderLeerjaarContent(leerjaarKey);
+}
+
+function renderLeerjaarContent(leerjaarKey) {
+    const leerjaar = leerlijnData[leerjaarKey];
+    const contentDiv = document.getElementById('leerjaar-content');
+    if (!leerjaar) {
+        contentDiv.innerHTML = "<p>Geen data gevonden voor dit leerjaar.</p>";
+        return;
+    }
+
+    let html = `<h2 class="text-2xl font-semibold mb-2 text-sky-700">${leerjaarKey.toUpperCase()}</h2>`;
+    html += `<p class="mb-6 text-stone-600">${leerjaar.introductie}</p>`;
+    
+    html += `<div id="thema-nav-${leerjaarKey}" class="mb-6 flex flex-wrap gap-2 border-b-2 border-stone-200 pb-3">`;
+    Object.keys(leerjaar.themas).forEach((themaKey, index) => {
+        html += `<button class="sub-tab-button ${index === 0 ? 'active' : ''} py-2 px-3 text-sm rounded-md font-medium hover:bg-sky-100 transition-colors border-2 border-sky-500" data-leerjaar="${leerjaarKey}" data-thema="${themaKey}">${leerjaar.themas[themaKey].naam}</button>`;
+    });
+    html += `</div>`;
+    html += `<div id="thema-content-${leerjaarKey}" class="mt-4"></div>`;
+    
+    contentDiv.innerHTML = html;
+
+    document.querySelectorAll(`#thema-nav-${leerjaarKey} .sub-tab-button`).forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll(`#thema-nav-${leerjaarKey} .sub-tab-button`).forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            renderThemaContent(button.dataset.leerjaar, button.dataset.thema);
+        });
+    });
+
+    // Add event listener for Gemini buttons using event delegation
+    contentDiv.addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-doel-id]');
+        if (!button) return;
+
+        const leerjaarKey = button.dataset.leerjaar;
+        const themaKey = button.dataset.thema;
+        const doelId = button.dataset.doelId;
+        const action = button.dataset.action;
+
+        const doel = leerlijnData[leerjaarKey].themas[themaKey].doelen.find(d => d.id === doelId);
+
+        if (doel) {
+            if (action === 'generate-activities') {
+                generateLeeractiviteiten(leerjaarKey, doel);
+            } else if (action === 'generate-criteria') {
+                generateBeoordelingscriteria(leerjaarKey, doel);
+            }
+        }
+    });
+
+
+    const eersteThemaKey = Object.keys(leerjaar.themas)[0];
+    if (eersteThemaKey) {
+        renderThemaContent(leerjaarKey, eersteThemaKey);
+    }
+}
+
+function renderThemaContent(leerjaarKey, themaKey) {
+    const thema = leerlijnData[leerjaarKey].themas[themaKey];
+    const contentDiv = document.getElementById(`thema-content-${leerjaarKey}`);
+    if (!thema) {
+        contentDiv.innerHTML = "<p>Geen data gevonden voor dit thema.</p>";
+        return;
+    }
+
+    let html = `<h3 class="text-xl font-semibold mb-2 text-sky-600">${thema.naam}</h3>`;
+    html += `<p class="italic text-stone-600 mb-3">${thema.intro.replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/\_(.*?)\_/g, '<em>$1</em>')}</p>`;
+    
+    html += `<div class="chart-container"><canvas id="bloomChart-${leerjaarKey}-${themaKey}"></canvas></div>`;
+
+    html += `<div class="overflow-x-auto mt-6 mb-4"><table class="min-w-full bg-white shadow rounded-lg"><thead><tr>
+                <th>Tussendoel ${leerjaarKey.toUpperCase()}</th>
+                <th>Bloom</th>
+                <th>RTTI</th>
+                <th class="w-1/3">Korte Toelichting (CA) & <em>(KD10)</em></th>
+                <th>AI Suggesties ✨</th>
+             </tr></thead><tbody>`;
+
+    thema.doelen.forEach(doel => {
+        html += `<tr>
+                    <td>
+                        <div class="font-semibold">${doel.tussendoel.replace(/\*(.*?)\*/g, '<strong>$1</strong>')}</div>
+                        <div class="text-xs text-stone-500">${doel.slo}: ${doel.omschrijving}</div>
+                    </td>
+                    <td style="color: ${bloomKleuren[doel.bloom] || '#000'}; font-weight: bold;">${doel.bloom}</td>
+                    <td class="rtti-${doel.rtti || 'N'}">${doel.rtti || 'N.v.t.'}</td>
+                    <td class="text-sm text-stone-600 details-column">${doel.toelichting.replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/\_(.*?)\_/g, '<em>$1</em>')}</td>
+                    <td class="space-y-2">
+                        <button class="w-full bg-sky-100 text-sky-800 text-xs px-2 py-1 rounded hover:bg-sky-200 transition-colors" data-leerjaar="${leerjaarKey}" data-thema="${themaKey}" data-doel-id="${doel.id}" data-action="generate-activities">✨ Genereer Activiteiten</button>
+                        <button class="w-full bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded hover:bg-amber-200 transition-colors" data-leerjaar="${leerjaarKey}" data-thema="${themaKey}" data-doel-id="${doel.id}" data-action="generate-criteria">✨ Genereer Criteria</button>
+                    </td>
+                 </tr>`;
+    });
+    html += `</tbody></table></div>`;
+    html += `<p class="mt-4 text-stone-600"><strong>Progressie binnen ${thema.naam} ${leerjaarKey.toUpperCase()}:</strong> ${thema.progressie.replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/\_(.*?)\_/g, '<em>$1</em>')}</p>`;
+    
+    contentDiv.innerHTML = html;
+    renderBloomChart(leerjaarKey, themaKey, thema.doelen);
+}
+
+
+function renderBloomChart(leerjaarKey, themaKey, doelen) {
+    const canvasId = `bloomChart-${leerjaarKey}-${themaKey}`;
+    const canvasElement = document.getElementById(canvasId);
+    if (!canvasElement) {
+        console.error(`Canvas element with id ${canvasId} not found.`);
+        return;
+    }
+    const ctx = canvasElement.getContext('2d');
+    
+    const bloomCounts = {};
+    bloomNiveaus.forEach(niveau => bloomCounts[niveau] = 0);
+    doelen.forEach(doel => {
+        if (bloomCounts.hasOwnProperty(doel.bloom)) {
+            bloomCounts[doel.bloom]++;
+        }
+    });
+
+    const chartData = {
+        labels: bloomNiveaus,
+        datasets: [{
+            label: `Verdeling Bloom Niveaus - ${leerlijnData[leerjaarKey].themas[themaKey].naam} (${leerjaarKey.toUpperCase()})`,
+            data: bloomNiveaus.map(niveau => bloomCounts[niveau]),
+            backgroundColor: bloomNiveaus.map(niveau => bloomKleuren[niveau] || 'rgba(200, 200, 200, 0.7)'),
+            borderColor: bloomNiveaus.map(niveau => (bloomKleuren[niveau] || 'rgba(200, 200, 200, 1)').replace('0.7', '1')),
+            borderWidth: 1
+        }]
+    };
+
+    if (currentChart && currentChart.canvas.id === canvasId) {
+        currentChart.destroy();
+    } else if (currentChart) {
+         currentChart.destroy(); 
+    }
+
+
+    currentChart = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        color: '#4b5563' 
+                    },
+                    grid: {
+                        color: '#e5e7eb' 
+                    }
+                },
+                x: {
+                     ticks: {
+                        color: '#4b5563',
+                        font: { size: 10 },
+                        callback: function(value, index, values) {
+                            const label = this.getLabelForValue(value);
+                            if (label.length > 10) { 
+                                const words = label.split(' ');
+                                const lines = [];
+                                let currentLine = '';
+                                words.forEach(word => {
+                                    if ((currentLine + word).length > 10 && currentLine) {
+                                        lines.push(currentLine.trim());
+                                        currentLine = '';
+                                    }
+                                    currentLine += word + ' ';
+                                });
+                                lines.push(currentLine.trim());
+                                return lines;
+                            }
+                            return label;
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                         color: '#1f2937',
+                         font: { size: 12 }
+                    }
+                },
+                tooltip: {
+                    enabled: false, 
+                    external: function(context) {
+                        const tooltipModel = context.tooltip;
+                        if (tooltipModel.opacity === 0) {
+                            tooltipEl.style.opacity = '0';
+                            return;
+                        }
+                        tooltipEl.style.opacity = '1';
+                        tooltipEl.style.left = tooltipModel.caretX + 'px';
+                        tooltipEl.style.top = tooltipModel.caretY + 'px';
+                        
+                        if (tooltipModel.body) {
+                            const titleLines = tooltipModel.title || [];
+                            const bodyLines = tooltipModel.body.map(b => b.lines);
+                            let innerHtml = '<div>';
+                            titleLines.forEach(function(title) {
+                                innerHtml += '<div class="font-bold">' + title + '</div>';
+                            });
+                            bodyLines.forEach(function(body, i) {
+                                const colors = tooltipModel.labelColors[i];
+                                const style = 'background:' + colors.backgroundColor + '; border-color:' + colors.borderColor + '; display:inline-block; width:10px; height:10px; margin-right:5px;';
+                                innerHtml += '<div><span style="' + style + '"></span>' + body + '</div>';
+                            });
+                            innerHtml += '</div>';
+                            tooltipEl.innerHTML = innerHtml;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    currentChart.canvas.id = canvasId; 
+}
+
+function buildProgressieData() {
+    const progressieMap = new Map();
+
+    ['vwo1', 'vwo2', 'vwo3'].forEach(leerjaarKey => {
+        const leerjaar = leerlijnData[leerjaarKey];
+        if (leerjaar && leerjaar.themas) {
+            Object.values(leerjaar.themas).forEach(thema => {
+                if (thema.doelen) {
+                    thema.doelen.forEach(doel => {
+                        const kerndoelKey = `${doel.slo}|${doel.omschrijving}`;
+                        if (!progressieMap.has(kerndoelKey)) {
+                            progressieMap.set(kerndoelKey, {
+                                sloCode: doel.slo,
+                                sloOmschrijving: doel.omschrijving,
+                                vwo1: new Set(),
+                                vwo2: new Set(),
+                                vwo3: new Set()
+                            });
+                        }
+                        const entry = progressieMap.get(kerndoelKey);
+                        entry[leerjaarKey].add(doel.tussendoel.replace(/\*(.*?)\*/g, '<strong>$1</strong>'));
+                    });
+                }
+            });
+        }
+    });
+    
+    const sortedProgressieData = Array.from(progressieMap.values()).sort((a, b) => {
+        const codeA = a.sloCode.match(/KD (\d+)([A-Z]*)/i) || a.sloCode.match(/(\d+)([A-Z]*)/i);
+        const codeB = b.sloCode.match(/KD (\d+)([A-Z]*)/i) || b.sloCode.match(/(\d+)([A-Z]*)/i);
+        
+        const numA = codeA ? parseInt(codeA[1]) : 99; 
+        const numB = codeB ? parseInt(codeB[1]) : 99;
+        const letterA = codeA && codeA[2] ? codeA[2].toUpperCase() : '';
+        const letterB = codeB && codeB[2] ? codeB[2].toUpperCase() : '';
+
+        if (numA !== numB) {
+            return numA - numB;
+        }
+        return letterA.localeCompare(letterB);
+    });
+
+    return sortedProgressieData;
+}
+
+function renderKerndoelProgressieTabel() {
+    const progressieData = buildProgressieData();
+    const tabelBody = document.querySelector("#kerndoel-progressie-tabel tbody");
+    if (!tabelBody) return;
+
+    tabelBody.innerHTML = ""; 
+
+    progressieData.forEach(item => {
+        const row = tabelBody.insertRow();
+        
+        const cellKerndoel = row.insertCell();
+        cellKerndoel.innerHTML = `<strong>${item.sloCode}</strong><br>${item.sloOmschrijving}`;
+        cellKerndoel.classList.add("font-medium", "text-sky-700");
+
+        const cellVwo1 = row.insertCell();
+        let vwo1Html = "<ul>";
+        item.vwo1.forEach(td => vwo1Html += `<li>${td}</li>`);
+        vwo1Html += "</ul>";
+        cellVwo1.innerHTML = item.vwo1.size > 0 ? vwo1Html : '-';
+        
+        const cellVwo2 = row.insertCell();
+        let vwo2Html = "<ul>";
+        item.vwo2.forEach(td => vwo2Html += `<li>${td}</li>`);
+        vwo2Html += "</ul>";
+        cellVwo2.innerHTML = item.vwo2.size > 0 ? vwo2Html : '-';
+
+        const cellVwo3 = row.insertCell();
+        let vwo3Html = "<ul>";
+        item.vwo3.forEach(td => vwo3Html += `<li>${td}</li>`);
+        vwo3Html += "</ul>";
+        cellVwo3.innerHTML = item.vwo3.size > 0 ? vwo3Html : '-';
+    });
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            activateTab(button.dataset.tab);
+        });
+    });
+
+    document.querySelectorAll('#leerjaar-nav .sub-tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            activateLeerjaarTab(button.dataset.leerjaar);
+        });
+    });
+
+    activateTab('tab-leerjaren'); 
+    activateLeerjaarTab('vwo1'); 
+});
+
+</script>
+</body>
+</html>
